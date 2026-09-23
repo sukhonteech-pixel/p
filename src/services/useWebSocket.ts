@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { AutomationJob, AutomationLog, Device } from '../types/automation';
+
+export type DashboardWsStatus = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'ERROR';
 
 export interface WebSocketState {
-  isConnected: boolean;
+  wsStatus: DashboardWsStatus;
+  isConnected: boolean; // Dashboard browser WS connection status ONLY
   lastEvent: string | null;
   activeScreenshot: string | null;
   activeJobProgress: {
@@ -15,23 +17,27 @@ export interface WebSocketState {
 }
 
 export function useWebSocket(onEvent?: (event: string, payload: any) => void) {
-  const [isConnected, setIsConnected] = useState(false);
+  const [wsStatus, setWsStatus] = useState<DashboardWsStatus>('CONNECTING');
   const [activeScreenshot, setActiveScreenshot] = useState<string | null>(null);
   const [activeJobProgress, setActiveJobProgress] = useState<WebSocketState['activeJobProgress']>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isUnmountedRef = useRef(false);
 
   const connect = useCallback(() => {
+    if (isUnmountedRef.current) return;
     try {
+      setWsStatus('CONNECTING');
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
-      const wsUrl = `${protocol}//${host}/ws`;
+      const wsUrl = `${protocol}//${host}/ws?clientType=dashboard`;
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        setIsConnected(true);
+        if (isUnmountedRef.current) return;
+        setWsStatus('CONNECTED');
       };
 
       ws.onmessage = (event) => {
@@ -58,7 +64,7 @@ export function useWebSocket(onEvent?: (event: string, payload: any) => void) {
                   ...prev,
                   progress: eventName === 'job.completed' ? 100 : prev.progress,
                   status: eventName === 'job.completed' ? 'COMPLETED' : eventName === 'job.failed' ? 'FAILED' : 'CANCELLED',
-                  currentStep: eventName === 'job.completed' ? 'Completed' : payload.error || 'Stopped',
+                  currentStep: eventName === 'job.completed' ? 'Completed' : payload.error || payload.errorMessage || 'Stopped',
                 };
               }
               return prev;
@@ -74,32 +80,46 @@ export function useWebSocket(onEvent?: (event: string, payload: any) => void) {
       };
 
       ws.onclose = () => {
-        setIsConnected(false);
-        // Attempt reconnect after 3 seconds
+        if (isUnmountedRef.current) return;
+        setWsStatus('DISCONNECTED');
+        // Safe reconnect with backoff
         if (!reconnectTimerRef.current) {
           reconnectTimerRef.current = setTimeout(() => {
             reconnectTimerRef.current = null;
-            connect();
+            if (!isUnmountedRef.current) {
+              connect();
+            }
           }, 3000);
         }
       };
 
       ws.onerror = () => {
-        ws.close();
+        if (isUnmountedRef.current) return;
+        setWsStatus('ERROR');
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
       };
     } catch (err) {
-      console.error('WebSocket connection failed:', err);
+      console.error('WebSocket connection setup failed:', err);
+      setWsStatus('ERROR');
     }
   }, [onEvent]);
 
   useEffect(() => {
+    isUnmountedRef.current = false;
     connect();
     return () => {
+      isUnmountedRef.current = true;
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
       }
       if (wsRef.current) {
         wsRef.current.close();
+        wsRef.current = null;
       }
     };
   }, [connect]);
@@ -111,9 +131,11 @@ export function useWebSocket(onEvent?: (event: string, payload: any) => void) {
   };
 
   return {
-    isConnected,
+    wsStatus,
+    isConnected: wsStatus === 'CONNECTED',
     activeScreenshot,
     activeJobProgress,
     sendEvent,
   };
 }
+

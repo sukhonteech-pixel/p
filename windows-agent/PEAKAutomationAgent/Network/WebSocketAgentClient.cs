@@ -37,13 +37,15 @@ namespace PEAKAutomationAgent.Network
                     await _ws.ConnectAsync(new Uri(_serverUrl), cancellationToken);
                     Console.WriteLine("[Network] Connected successfully to PEAK Automation Server!");
 
+                    bool isPrimeRunning = System.Diagnostics.Process.GetProcessesByName("PrimeGlobalAsset").Length > 0;
+
                     // Send initial handshake
                     await SendEventAsync("agent.handshake", new
                     {
                         deviceName = _deviceName,
                         token = _deviceToken,
                         os = Environment.OSVersion.ToString(),
-                        primeDetected = true
+                        primeDetected = isPrimeRunning
                     });
 
                     // Start Heartbeat loop in background
@@ -89,11 +91,12 @@ namespace PEAKAutomationAgent.Network
                 await Task.Delay(10000, cancellationToken);
                 try
                 {
+                    bool isPrimeRunning = System.Diagnostics.Process.GetProcessesByName("PrimeGlobalAsset").Length > 0;
                     await SendEventAsync("device.heartbeat", new
                     {
                         deviceName = _deviceName,
                         status = "ONLINE",
-                        primeDetected = true,
+                        primeDetected = isPrimeRunning,
                         timestamp = DateTime.UtcNow
                     });
                 }
@@ -148,12 +151,14 @@ namespace PEAKAutomationAgent.Network
             });
         }
 
-        public async Task SendJobFailedAsync(string jobId, string error)
+        public async Task SendJobFailedAsync(string jobId, string error, string? errorCode = null)
         {
             await SendEventAsync("job.failed", new
             {
                 jobId,
-                error
+                error,
+                errorCode = errorCode ?? "AGENT_ERROR",
+                errorMessage = error
             });
         }
 

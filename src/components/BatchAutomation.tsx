@@ -22,6 +22,7 @@ import {
   Image as ImageIcon,
   AlertOctagon,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { AutomationJob, Device } from '../types/automation';
@@ -62,6 +63,8 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
   const [batchJobs, setBatchJobs] = useState<AutomationJob[]>([]);
   const [currentProcessingIndex, setCurrentProcessingIndex] = useState<number>(0);
   const [isBatchRunning, setIsBatchRunning] = useState<boolean>(false);
+  const [isStarting, setIsStarting] = useState<boolean>(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [batchCompleted, setBatchCompleted] = useState<boolean>(false);
 
   // Stats
@@ -69,6 +72,17 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
   const [totalLandlordsSaved, setTotalLandlordsSaved] = useState<number>(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Clean up polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   // Check if properties already exist in PEAK database when rows are loaded
   useEffect(() => {
@@ -161,44 +175,63 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
 
   // START AUTOMATION PIPELINE (กด START -> ทำทีละทรัพย์)
   const handleStartBatch = async () => {
+    setApiError(null);
     const selectedProperties = parsedRows
       .filter((r) => r.selected && r.status !== 'INVALID')
       .map((r) => r.propertyNo);
 
     if (selectedProperties.length === 0) {
-      alert('กรุณาเลือกอย่างน้อย 1 รายการเพื่อเริ่มระบบ Automation');
+      setApiError('กรุณาเลือกอย่างน้อย 1 รายการเพื่อเริ่มระบบ Automation');
       return;
     }
 
-    try {
-      setIsBatchRunning(true);
-      setCurrentStep(3); // Go to execution view
-      setCurrentProcessingIndex(0);
+    setIsStarting(true);
 
-      // Create batch jobs in server
+    try {
+      // 1. Call API FIRST - DO NOT setCurrentStep(3) or setIsBatchRunning(true) before createBatch succeeds!
       const res = await api.createBatch({
         propertyNos: selectedProperties,
         deviceId: selectedDevice,
       });
 
-      const initialJobs = res.jobs || [];
-      setBatchJobs(initialJobs);
+      // 2. Validate response - if no jobs, do not proceed
+      if (!res || !Array.isArray(res.jobs) || res.jobs.length === 0) {
+        throw new Error('ไม่สามารถเริ่ม Automation ได้: เซิร์ฟเวอร์ไม่ส่งรายการงานที่พร้อมดำเนินการกลับมา');
+      }
+
+      // 3. Only when createBatch succeeds and jobs.length > 0
+      setBatchJobs(res.jobs);
+      setCurrentProcessingIndex(0);
+      setIsBatchRunning(true);
+      setCurrentStep(3); // Transition to Step 3 ONLY AFTER SUCCESS
+      setBatchCompleted(false);
 
       if (onBatchStarted) {
         onBatchStarted();
       }
 
-      // Start client polling / monitoring loop for sequential updates
-      pollBatchExecution(initialJobs.map((j) => j.id));
-    } catch (err) {
+      // 4. Start polling sequential jobs
+      pollBatchExecution(res.jobs.map((j) => j.id));
+    } catch (err: any) {
       console.error('Failed to start batch:', err);
+      const msg = err?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์';
+      setApiError(msg);
       setIsBatchRunning(false);
+      setCurrentStep(2); // Stay in Step 2 with clear error
+    } finally {
+      setIsStarting(false);
     }
   };
 
   // Polling loop to track each property as it executes sequentially
   const pollBatchExecution = (jobIds: string[]) => {
-    const interval = setInterval(async () => {
+    // Clear any previous interval before starting a new one
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    pollIntervalRef.current = setInterval(async () => {
       try {
         const updatedJobs: AutomationJob[] = [];
         let allDone = true;
@@ -232,7 +265,9 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
           }
 
           if (j.status === 'COMPLETED') {
-            photosCountAcc += j.resultData?.photosCount || 12;
+            // Count actual photos received from automation - NEVER fallback to 12!
+            const realPhotos = j.resultData?.photosCount ?? j.resultData?.photos?.length ?? 0;
+            photosCountAcc += realPhotos;
             if (j.resultData?.landlord?.phone_no_1) {
               landlordsCountAcc++;
             }
@@ -245,7 +280,10 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
         setTotalLandlordsSaved(landlordsCountAcc);
 
         if (allDone) {
-          clearInterval(interval);
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
           setIsBatchRunning(false);
           setBatchCompleted(true);
           setCurrentStep(4); // Move to summary (สรุปผลทั้งหมด)
@@ -307,7 +345,7 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
     { id: 5, title: 'Automation ทำทีละทรัพย์', desc: 'Sequential Queue' },
     { id: 6, title: 'Prime Global Asset', desc: 'Focus หน้าต่าง Desktop' },
     { id: 7, title: 'ค้นหารหัส', desc: 'ป้อนรหัส & ค้นหาในโปรแกรม' },
-    { id: 8, title: 'ดึงข้อมูล + รูป', desc: 'ราคา, เบอร์เจ้าของ, 12 รูป' },
+    { id: 8, title: 'ดึงข้อมูล + รูป', desc: 'ราคา, เบอร์เจ้าของ, รูปภาพ' },
     { id: 9, title: 'บันทึก PEAK', desc: 'Supabase & Database' },
     { id: 10, title: 'ไปทรัพย์ถัดไป', desc: 'ประมวลผลรายการต่อไป' },
     { id: 11, title: 'สรุปผลทั้งหมด', desc: 'รายงานผลสำเร็จ & ส่งออก' },
@@ -499,18 +537,52 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
                 id="btn-trigger-start-automation"
                 type="button"
                 onClick={handleStartBatch}
-                disabled={selectedCount === 0}
+                disabled={selectedCount === 0 || isStarting}
                 className={`text-xs font-bold px-6 py-2.5 rounded-lg uppercase tracking-wider flex items-center gap-2 shadow-sm transition-all ${
-                  selectedCount === 0
+                  selectedCount === 0 || isStarting
                     ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed'
                     : 'bg-red-900 hover:bg-red-800 text-white cursor-pointer active:scale-98'
                 }`}
               >
-                <Play className="w-4 h-4 fill-white" />
-                กด START ({selectedCount} ทรัพย์)
+                {isStarting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    กำลังเริ่มระบบ...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-white" />
+                    กด START ({selectedCount} ทรัพย์)
+                  </>
+                )}
               </button>
             </div>
           </div>
+
+          {/* API Error State Banner */}
+          {apiError && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start justify-between gap-3 text-red-900 animate-fadeIn">
+              <div className="flex items-start gap-3">
+                <AlertOctagon className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div className="text-xs">
+                  <p className="font-bold text-red-950 text-sm">ไม่สามารถเริ่ม Automation ได้</p>
+                  <p className="mt-1 text-red-800 leading-relaxed">{apiError}</p>
+                  {apiError.includes('Agent') && (
+                    <div className="mt-2 text-[11px] font-medium text-red-900 bg-red-100/70 p-2.5 rounded-lg border border-red-200">
+                      คำแนะนำ: กรุณาเปิดโปรแกรม <strong>PEAK Automation Agent</strong> บนเครื่อง Windows และตรวจสอบให้แน่ใจว่า Agent ออนไลน์ก่อนเริ่มทำงาน
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setApiError(null)}
+                className="p-1 text-red-400 hover:text-red-700 rounded transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* Summary Metric Ribbon */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -632,7 +704,7 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
                       </td>
                       <td className="py-3 px-4 text-zinc-600 text-[11px]">
                         {row.errorMessage ||
-                          (row.status === 'READY' ? 'จะดึงข้อมูล & 12 รูปภาพ' : '—')}
+                          (row.status === 'READY' ? 'จะดึงข้อมูล & รูปภาพ' : '—')}
                       </td>
                     </tr>
                   ))}
@@ -655,10 +727,10 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono font-bold px-2 py-0.5 bg-red-900 text-white rounded">
-                    กำลังประมวลผลทรัพย์ที่ {currentProcessingIndex + 1} จาก {batchJobs.length}
+                    กำลังประมวลผลทรัพย์ที่ {batchJobs.length > 0 ? currentProcessingIndex + 1 : 0} จาก {batchJobs.length}
                   </span>
                   <h3 className="text-base font-extrabold text-zinc-900 font-mono">
-                    Target Property: {activeJob?.propertyNo || 'กำลังเริ่มระบบ...'}
+                    Target Property: {activeJob?.propertyNo || (batchJobs.length > 0 ? batchJobs[0].propertyNo : 'ไม่มีงานในคิว')}
                   </h3>
                 </div>
                 <p className="text-xs text-zinc-500 mt-1">
@@ -717,7 +789,7 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
                 {[
                   { name: '1. Prime Global Asset', desc: 'Focus หน้าต่างโปรแกรม', thresh: 15 },
                   { name: '2. ค้นหารหัส', desc: `ค้นหา ${activeJob?.propertyNo}`, thresh: 35 },
-                  { name: '3. ดึงข้อมูล + รูป', desc: 'ราคา, เบอร์, 12 รูป', thresh: 75 },
+                  { name: '3. ดึงข้อมูล + รูป', desc: 'ราคา, เบอร์, รูปภาพ', thresh: 75 },
                   { name: '4. บันทึก PEAK', desc: 'Supabase & Database', thresh: 90 },
                   { name: '5. ไปทรัพย์ถัดไป', desc: 'สลับคิวอัตโนมัติ', thresh: 98 },
                 ].map((st, i) => {
@@ -840,10 +912,10 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
                           {job.currentStep} ({job.progress}%)
                         </td>
                         <td className="py-3.5 px-4 text-zinc-600">
-                          {job.resultData?.photosCount ? (
+                          {job.resultData?.photosCount ?? job.resultData?.photos?.length ? (
                             <span className="font-mono text-emerald-700 font-bold">
-                              {job.resultData.photosCount} รูป |{' '}
-                              {job.resultData?.landlord?.phone_no_1 || '0809682838'}
+                              {job.resultData.photosCount ?? job.resultData?.photos?.length} รูป |{' '}
+                              {job.resultData?.landlord?.phone_no_1 || '—'}
                             </span>
                           ) : (
                             '—'
@@ -920,7 +992,7 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
             <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl">
               <span className="text-xs font-semibold text-zinc-500 uppercase">รูปภาพที่บันทึก</span>
               <p className="text-2xl font-black font-mono text-red-950 mt-1">
-                {totalPhotosSaved || batchJobs.length * 12}{' '}
+                {totalPhotosSaved}{' '}
                 <span className="text-xs font-medium text-zinc-400">รูป (Supabase)</span>
               </p>
             </div>
@@ -928,7 +1000,7 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
             <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl">
               <span className="text-xs font-semibold text-zinc-500 uppercase">เบอร์โทรเจ้าของทรัพย์</span>
               <p className="text-2xl font-black font-mono text-zinc-900 mt-1">
-                {totalLandlordsSaved || batchJobs.length}{' '}
+                {totalLandlordsSaved}{' '}
                 <span className="text-xs font-medium text-zinc-400">เบอร์</span>
               </p>
             </div>
@@ -966,13 +1038,13 @@ export const BatchAutomation: React.FC<BatchAutomationProps> = ({
                         {job.propertyNo}
                       </td>
                       <td className="py-3 px-4 font-semibold text-zinc-800">
-                        {job.resultData?.landlord?.name || 'Khun Somsak Prasertvongsa'}
+                        {job.resultData?.landlord?.name || '—'}
                       </td>
                       <td className="py-3 px-4 font-mono text-red-900 font-bold">
-                        {job.resultData?.landlord?.phone_no_1 || '0809682838'}
+                        {job.resultData?.landlord?.phone_no_1 || '—'}
                       </td>
                       <td className="py-3 px-4 font-mono text-zinc-700">
-                        {job.resultData?.photosCount || 12} รูป
+                        {job.resultData?.photosCount ?? job.resultData?.photos?.length ?? 0} รูป
                       </td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">

@@ -51,6 +51,24 @@ $env:PEAK_DEVICE_NAME = "Office PC"
 dotnet run -c Release
 ```
 
+### 🔍 Automation Inspector Mode (Live UI Element Tree)
+
+To discover and inspect the exact UI Automation IDs, Control Types, and element names of Prime Global Asset:
+
+```powershell
+# Using dotnet CLI
+dotnet run -c Release -- inspect
+
+# Or using the compiled executable
+.\PEAKAutomationAgent.exe inspect
+```
+This command outputs the live hierarchy tree:
+```
+├─ [Button] AutomationId="Nav_Properties", Name="Properties", Bounds=[10,50,120x40], Enabled=True
+├─ [Edit] AutomationId="SearchBox_PropertyNo", Name="Property No", Bounds=[210,120,180x30], Enabled=True
+├─ [Tab] AutomationId="DetailTabs", Name="Property Details", ...
+```
+
 ### Publishing Standalone Windows Executable (.exe)
 
 To generate a single-file executable that requires no pre-installed .NET runtime:

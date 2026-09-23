@@ -15,8 +15,12 @@ app.use(express.json());
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
-// Store connected WebSocket clients
+// Store all connected WebSocket clients (dashboard UI + desktop agents)
 const connectedClients = new Set<WebSocket>();
+
+// Agent device socket registry (device.id -> WebSocket) and reverse mapping
+const agentSockets = new Map<string, WebSocket>();
+const socketToDevice = new Map<WebSocket, string>();
 
 function broadcast(event: string, payload: any) {
   const message = JSON.stringify({ event, payload });
@@ -31,20 +35,54 @@ function broadcast(event: string, payload: any) {
   });
 }
 
-// Instantiate Automation Engine
-const engine = new AutomationEngine(broadcast);
+// Instantiate Automation Engine with real agent socket getter
+const engine = new AutomationEngine(broadcast, (deviceId: string) => {
+  return agentSockets.get(deviceId);
+});
 
 // WebSocket Connection Management
 wss.on('connection', (ws, req) => {
   connectedClients.add(ws);
 
-  // Send initial handshake state
+  // Parse connection metadata from URL and headers
+  const reqUrl = req.url || '';
+  const host = req.headers.host || 'localhost';
+  let clientType = 'dashboard';
+  let queryDeviceId: string | null = null;
+
+  try {
+    const parsedUrl = new URL(reqUrl, `http://${host}`);
+    clientType = parsedUrl.searchParams.get('clientType') || 'dashboard';
+    queryDeviceId = parsedUrl.searchParams.get('deviceId');
+  } catch {
+    // fallback
+  }
+
+  const tokenHeader = req.headers['x-device-token'];
+  const nameHeader = req.headers['x-device-name'];
+  if (tokenHeader || nameHeader) {
+    clientType = 'agent';
+  }
+
+  // If connected as a Windows Agent
+  if (clientType === 'agent') {
+    const deviceId = queryDeviceId || 'dev-office-pc-01';
+    agentSockets.set(deviceId, ws);
+    socketToDevice.set(ws, deviceId);
+    const updatedDevice = automationStore.updateDeviceHeartbeat(deviceId, true);
+    console.log(`[WS] Windows Agent connected: ${deviceId} (${updatedDevice?.name || 'Device'})`);
+    broadcast('device.connected', { deviceId, device: updatedDevice });
+    broadcast('device.heartbeat', { device: updatedDevice, deviceId, status: 'ONLINE', primeDetected: true });
+  }
+
+  // Send initial handshake state to the connected client
   ws.send(
     JSON.stringify({
       event: 'connected',
       payload: {
         timestamp: new Date().toISOString(),
         devices: automationStore.getDevices(),
+        clientType,
       },
     })
   );
@@ -54,10 +92,41 @@ wss.on('connection', (ws, req) => {
       const parsed = JSON.parse(data.toString());
       const { event, payload } = parsed;
 
-      if (event === 'device.heartbeat') {
-        const device = automationStore.updateDeviceHeartbeat(payload?.id || 'dev-office-pc-01', payload?.primeDetected);
-        broadcast('device.heartbeat', { device });
-      } else if (event === 'job.start_request') {
+      // 1. Agent Handshake / Registration
+      if (event === 'agent.handshake') {
+        const deviceId = payload?.deviceId || payload?.id || queryDeviceId || 'dev-office-pc-01';
+        agentSockets.set(deviceId, ws);
+        socketToDevice.set(ws, deviceId);
+        const device = automationStore.updateDeviceHeartbeat(deviceId, payload?.primeDetected ?? true);
+        console.log(`[Agent Handshake] Device ${deviceId} paired and status is ONLINE`);
+        broadcast('device.connected', { deviceId, device });
+        broadcast('device.heartbeat', { device, deviceId, status: 'ONLINE', primeDetected: device?.primeDetected });
+      }
+
+      // 2. Real Heartbeat from Windows Agent
+      else if (event === 'device.heartbeat') {
+        const deviceId = payload?.deviceId || payload?.id || socketToDevice.get(ws) || 'dev-office-pc-01';
+        agentSockets.set(deviceId, ws);
+        socketToDevice.set(ws, deviceId);
+        const device = automationStore.updateDeviceHeartbeat(deviceId, payload?.primeDetected ?? true);
+        broadcast('device.heartbeat', { device, deviceId, status: 'ONLINE', primeDetected: device?.primeDetected });
+      }
+
+      // 3. Real Agent Execution Events
+      else if (event === 'agent.step' || event === 'job.progress') {
+        engine.handleAgentStep(payload);
+      } else if (event === 'agent.log' || event === 'job.log') {
+        engine.handleAgentLog(payload);
+      } else if (event === 'agent.data' || event === 'job.screenshot') {
+        engine.handleAgentData(payload);
+      } else if (event === 'agent.completed' || event === 'job.completed') {
+        engine.handleAgentCompleted(payload);
+      } else if (event === 'agent.error' || event === 'job.failed') {
+        engine.handleAgentFailed(payload);
+      }
+
+      // 4. Dashboard User Actions
+      else if (event === 'job.start_request') {
         engine.runJob(payload.jobId);
       }
     } catch (e) {
@@ -65,26 +134,44 @@ wss.on('connection', (ws, req) => {
     }
   });
 
-  ws.on('close', () => {
+  // Handle Disconnect
+  const handleDisconnect = () => {
     connectedClients.delete(ws);
-  });
+    const mappedDeviceId = socketToDevice.get(ws);
+    if (mappedDeviceId) {
+      agentSockets.delete(mappedDeviceId);
+      socketToDevice.delete(ws);
+      const offlineDev = automationStore.setDeviceOffline(mappedDeviceId);
+      console.log(`[WS] Windows Agent disconnected (${mappedDeviceId}). Status set to OFFLINE.`);
+      if (offlineDev) {
+        broadcast('device.offline', { deviceId: mappedDeviceId, device: offlineDev });
+        broadcast('device.heartbeat', { device: offlineDev, deviceId: mappedDeviceId, status: 'OFFLINE' });
+      }
+    }
+  };
 
+  ws.on('close', handleDisconnect);
   ws.on('error', (err) => {
     console.error('WebSocket client error:', err);
-    connectedClients.delete(ws);
+    handleDisconnect();
   });
 });
 
-// Periodic device heartbeat simulator to maintain "Office PC" live state
+// Real Heartbeat Timeout Monitor: Check every 3 seconds
+// If no heartbeat from agent for > 15 seconds, mark device OFFLINE
 setInterval(() => {
-  automationStore.updateDeviceHeartbeat('dev-office-pc-01', true);
-  broadcast('device.heartbeat', {
-    deviceId: 'dev-office-pc-01',
-    status: 'ONLINE',
-    primeDetected: true,
-    lastHeartbeat: new Date().toISOString(),
-  });
-}, 10000);
+  const timedOutDevices = automationStore.checkHeartbeatTimeouts(15000);
+  for (const dev of timedOutDevices) {
+    console.log(`[Heartbeat Timeout] Device ${dev.id} timed out (>15s without heartbeat). Marked OFFLINE.`);
+    const socket = agentSockets.get(dev.id);
+    if (socket) {
+      agentSockets.delete(dev.id);
+      socketToDevice.delete(socket);
+    }
+    broadcast('device.offline', { deviceId: dev.id, device: dev });
+    broadcast('device.heartbeat', { device: dev, deviceId: dev.id, status: 'OFFLINE' });
+  }
+}, 3000);
 
 // ==============================================================================
 // REST API ENDPOINTS
@@ -130,6 +217,11 @@ app.post('/api/automation/devices/:id/revoke', (req, res) => {
   if (!revoked) {
     return res.status(404).json({ error: 'Device not found' });
   }
+  const socket = agentSockets.get(req.params.id);
+  if (socket) {
+    agentSockets.delete(req.params.id);
+    socketToDevice.delete(socket);
+  }
   broadcast('device.disconnected', { id: req.params.id });
   res.json({ success: true, revoked });
 });
@@ -139,14 +231,15 @@ app.post('/api/automation/devices/:id/test', (req, res) => {
   if (!device) {
     return res.status(404).json({ error: 'Device not found' });
   }
-  automationStore.updateDeviceHeartbeat(device.id, true);
+  const socket = agentSockets.get(device.id);
+  const isOnline = device.status === 'ONLINE' && socket && socket.readyState === WebSocket.OPEN;
+
   res.json({
-    success: true,
-    latencyMs: 14,
+    success: isOnline,
+    latencyMs: isOnline ? 12 : null,
     device: {
       ...device,
-      status: 'ONLINE',
-      primeDetected: true,
+      status: isOnline ? 'ONLINE' : 'OFFLINE',
     },
   });
 });
@@ -162,9 +255,21 @@ app.post('/api/automation/jobs', (req, res) => {
     return res.status(400).json({ error: 'propertyNo is required' });
   }
 
+  const targetDeviceId = deviceId || 'dev-office-pc-01';
+  const device = automationStore.getDeviceById(targetDeviceId);
+  const agentWs = agentSockets.get(targetDeviceId);
+  const isAgentOnline = device?.status === 'ONLINE' && agentWs && agentWs.readyState === WebSocket.OPEN;
+
+  if (!isAgentOnline) {
+    return res.status(400).json({
+      error: `ไม่สามารถเริ่ม Automation ได้: Windows Agent (${device?.name || targetDeviceId}) ออฟไลน์ กรุณาเปิดโปรแกรม PEAK Automation Agent บน Windows ก่อนเริ่มระบบ`,
+      errorCode: 'AGENT_OFFLINE',
+    });
+  }
+
   const job = automationStore.createJob({
     propertyNo,
-    deviceId: deviceId || 'dev-office-pc-01',
+    deviceId: targetDeviceId,
     options: options || {
       propertyInfo: true,
       landlordInfo: true,
@@ -180,7 +285,7 @@ app.post('/api/automation/jobs', (req, res) => {
 
   broadcast('job.created', job);
 
-  // Automatically start job
+  // Run job via Automation Engine
   engine.runJob(job.id);
 
   res.status(201).json(job);
@@ -246,13 +351,25 @@ app.post('/api/automation/batch', (req, res) => {
     return res.status(400).json({ error: 'propertyNos array is required' });
   }
 
+  const targetDeviceId = deviceId || 'dev-office-pc-01';
+  const device = automationStore.getDeviceById(targetDeviceId);
+  const agentWs = agentSockets.get(targetDeviceId);
+  const isAgentOnline = device?.status === 'ONLINE' && agentWs && agentWs.readyState === WebSocket.OPEN;
+
+  if (!isAgentOnline) {
+    return res.status(400).json({
+      error: `ไม่สามารถเริ่ม Batch Automation ได้: Windows Agent (${device?.name || targetDeviceId}) ออฟไลน์ กรุณาเปิดโปรแกรม PEAK Automation Agent บน Windows ก่อนเริ่มระบบ`,
+      errorCode: 'AGENT_OFFLINE',
+    });
+  }
+
   const createdJobs = [];
   for (const pNo of propertyNos) {
     const cleanNo = String(pNo).trim();
     if (cleanNo) {
       const job = automationStore.createJob({
         propertyNo: cleanNo,
-        deviceId: deviceId || 'dev-office-pc-01',
+        deviceId: targetDeviceId,
         options: options || {
           propertyInfo: true,
           landlordInfo: true,
@@ -269,7 +386,7 @@ app.post('/api/automation/batch', (req, res) => {
     }
   }
 
-  // Sequentially or queued run
+  // Sequentially execute jobs through engine
   (async () => {
     for (const job of createdJobs) {
       await engine.runJob(job.id);
@@ -285,7 +402,7 @@ app.get('/api/automation/logs', (req, res) => {
   res.json(automationStore.getLogs(jobId as string | undefined));
 });
 
-// 6. Properties in Database
+// 6. Properties in Synced Database
 app.get('/api/automation/properties', (req, res) => {
   res.json(automationStore.getAllProperties());
 });

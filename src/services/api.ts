@@ -1,46 +1,96 @@
 import { AutomationJob, AutomationLog, Device, JobOptions } from '../types/automation';
 
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  data?: any;
+
+  constructor(message: string, status: number, code?: string, data?: any) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.data = data;
+  }
+}
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (err: any) {
+    throw new ApiError(
+      `ไม่สามารถเชื่อมต่อ Server ได้: ${err?.message || 'Network request failed'}`,
+      0,
+      'NETWORK_ERROR'
+    );
+  }
+
+  let body: any = null;
+  const contentType = res.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+  } else {
+    try {
+      body = await res.text();
+    } catch {
+      body = null;
+    }
+  }
+
+  if (!res.ok) {
+    const errorMsg =
+      (body && typeof body === 'object' && (body.message || body.error)) ||
+      res.statusText ||
+      `HTTP Error ${res.status}`;
+    const errorCode =
+      body && typeof body === 'object' && typeof body.error === 'string'
+        ? body.error
+        : `HTTP_${res.status}`;
+    throw new ApiError(errorMsg, res.status, errorCode, body);
+  }
+
+  return body as T;
+}
+
 export const api = {
   // Health
   async getHealth() {
-    const res = await fetch('/api/automation/health');
-    return res.json();
+    return request<any>('/api/automation/health');
   },
 
   // Devices
   async getDevices(): Promise<Device[]> {
-    const res = await fetch('/api/automation/devices');
-    return res.json();
+    return request<Device[]>('/api/automation/devices');
   },
 
   async pairDevice(data: { name: string; os?: string; ipAddress?: string; primeDetected?: boolean }): Promise<Device> {
-    const res = await fetch('/api/automation/devices/pair', {
+    return request<Device>('/api/automation/devices/pair', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    return res.json();
   },
 
   async revokeDevice(id: string) {
-    const res = await fetch(`/api/automation/devices/${id}/revoke`, { method: 'POST' });
-    return res.json();
+    return request<any>(`/api/automation/devices/${id}/revoke`, { method: 'POST' });
   },
 
   async testDevice(id: string) {
-    const res = await fetch(`/api/automation/devices/${id}/test`, { method: 'POST' });
-    return res.json();
+    return request<any>(`/api/automation/devices/${id}/test`, { method: 'POST' });
   },
 
   // Jobs
   async getJobs(): Promise<AutomationJob[]> {
-    const res = await fetch('/api/automation/jobs');
-    return res.json();
+    return request<AutomationJob[]>('/api/automation/jobs');
   },
 
   async getJob(id: string): Promise<{ job: AutomationJob; logs: AutomationLog[] }> {
-    const res = await fetch(`/api/automation/jobs/${id}`);
-    return res.json();
+    return request<{ job: AutomationJob; logs: AutomationLog[] }>(`/api/automation/jobs/${id}`);
   },
 
   async createJob(data: {
@@ -49,37 +99,31 @@ export const api = {
     options?: Partial<JobOptions>;
     dryRun?: boolean;
   }): Promise<AutomationJob> {
-    const res = await fetch('/api/automation/jobs', {
+    return request<AutomationJob>('/api/automation/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    return res.json();
   },
 
   async pauseJob(id: string) {
-    const res = await fetch(`/api/automation/jobs/${id}/pause`, { method: 'POST' });
-    return res.json();
+    return request<any>(`/api/automation/jobs/${id}/pause`, { method: 'POST' });
   },
 
   async resumeJob(id: string) {
-    const res = await fetch(`/api/automation/jobs/${id}/resume`, { method: 'POST' });
-    return res.json();
+    return request<any>(`/api/automation/jobs/${id}/resume`, { method: 'POST' });
   },
 
   async cancelJob(id: string) {
-    const res = await fetch(`/api/automation/jobs/${id}/cancel`, { method: 'POST' });
-    return res.json();
+    return request<any>(`/api/automation/jobs/${id}/cancel`, { method: 'POST' });
   },
 
   async emergencyStop(id: string) {
-    const res = await fetch(`/api/automation/jobs/${id}/emergency-stop`, { method: 'POST' });
-    return res.json();
+    return request<any>(`/api/automation/jobs/${id}/emergency-stop`, { method: 'POST' });
   },
 
   async retryJob(id: string): Promise<AutomationJob> {
-    const res = await fetch(`/api/automation/jobs/${id}/retry`, { method: 'POST' });
-    return res.json();
+    return request<AutomationJob>(`/api/automation/jobs/${id}/retry`, { method: 'POST' });
   },
 
   async createBatch(data: {
@@ -88,29 +132,37 @@ export const api = {
     options?: Partial<JobOptions>;
     dryRun?: boolean;
   }): Promise<{ count: number; jobs: AutomationJob[] }> {
-    const res = await fetch('/api/automation/batch', {
+    const result = await request<{ count: number; jobs: AutomationJob[] }>('/api/automation/batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    return res.json();
+
+    if (!result || !Array.isArray(result.jobs) || result.jobs.length === 0 || !result.count || result.count === 0) {
+      throw new ApiError(
+        'การสร้าง Batch ไม่สำเร็จ: ไม่ได้รับรายการงานที่พร้อมประมวลผลจากเซิร์ฟเวอร์',
+        500,
+        'EMPTY_BATCH_RESPONSE',
+        result
+      );
+    }
+
+    return result;
   },
 
   // Logs
   async getLogs(jobId?: string): Promise<AutomationLog[]> {
     const url = jobId ? `/api/automation/logs?jobId=${encodeURIComponent(jobId)}` : '/api/automation/logs';
-    const res = await fetch(url);
-    return res.json();
+    return request<AutomationLog[]>(url);
   },
 
   // Synced Properties in PEAK Database
   async getProperties() {
-    const res = await fetch('/api/automation/properties');
-    return res.json();
+    return request<any>('/api/automation/properties');
   },
 
   async getProperty(propertyNo: string) {
-    const res = await fetch(`/api/automation/properties/${encodeURIComponent(propertyNo)}`);
-    return res.json();
+    return request<any>(`/api/automation/properties/${encodeURIComponent(propertyNo)}`);
   },
 };
+

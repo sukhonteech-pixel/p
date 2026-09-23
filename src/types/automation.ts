@@ -67,6 +67,7 @@ export interface AutomationJob {
     fieldsCount?: number;
     photosCount?: number;
     verificationNotes?: string[];
+    extractedAt?: string;
   };
 }
 
@@ -74,7 +75,13 @@ export interface AutomationLog {
   id: string;
   jobId: string;
   propertyNo?: string;
+  deviceId?: string;
+  step?: string;
+  status?: string;
   timestamp: string;
+  duration?: number;
+  errorCode?: string;
+  errorMessage?: string;
   level: LogLevel;
   action: string;
   message: string;
