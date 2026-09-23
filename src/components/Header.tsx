@@ -1,37 +1,37 @@
 import React from 'react';
-import { ShieldCheck, Cpu, HardDrive, Database, Activity, RefreshCw } from 'lucide-react';
+import {
+  Building2,
+  Database,
+  HardDrive,
+  RefreshCw,
+  Upload,
+  FileText,
+  Phone,
+  Settings,
+  LayoutDashboard,
+} from 'lucide-react';
+import { DashboardStats } from '../services/api';
 
 interface HeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  onlineDevicesCount: number;
-  health: {
-    database: string;
-    storage: string;
-    server: string;
-    agent: string;
-  };
-  wsConnected: boolean;
+  stats: DashboardStats;
   onRefresh: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
-  onlineDevicesCount,
-  health,
-  wsConnected,
+  stats,
   onRefresh,
 }) => {
   const navItems = [
-    { id: 'automation', label: 'Property Automation' },
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'monitor', label: 'Live Monitor' },
-    { id: 'jobs', label: 'Jobs & History' },
-    { id: 'batch', label: 'Batch Excel Automation' },
-    { id: 'properties', label: 'Synced Properties' },
-    { id: 'devices', label: 'Devices' },
-    { id: 'logs', label: 'Logs' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'properties', label: 'Properties', icon: Building2 },
+    { id: 'upload', label: 'Upload Excel', icon: Upload },
+    { id: 'contacts', label: 'Contacts', icon: Phone },
+    { id: 'files', label: 'Files', icon: FileText },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   return (
@@ -41,47 +41,40 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between h-16">
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-red-900 to-red-950 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-red-900 to-red-950 flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
               P
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold tracking-wider text-zinc-900 text-lg uppercase">
+                <span className="font-extrabold tracking-wider text-zinc-900 text-lg uppercase font-sans">
                   PEAK
                 </span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-900 tracking-wide">
-                  AUTOMATION
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-900 tracking-wide">
+                  PROPERTY DATA
                 </span>
               </div>
-              <p className="text-xs text-zinc-500 font-medium">
-                Prime Global Asset Desktop Orchestration Suite
+              <p className="text-[11px] text-zinc-500 font-medium">
+                Enterprise Real Estate Database & Asset Hub
               </p>
             </div>
           </div>
 
           {/* System Health Indicators */}
-          <div className="hidden md:flex items-center gap-4 text-xs font-medium">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-700">
+          <div className="hidden md:flex items-center gap-3 text-xs font-medium">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-100 text-zinc-700">
               <Database className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Database: {health.database}</span>
+              <span>Database: <strong className="text-zinc-900">{stats.totalProperties} items</strong></span>
             </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-700">
-              <HardDrive className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Storage: {health.storage}</span>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-700">
-              <Cpu className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Agent: {health.agent}</span>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-700">
-              <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-              <span>{wsConnected ? 'Live WebSocket' : 'Connecting...'}</span>
+
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-100 text-zinc-700">
+              <HardDrive className="w-3.5 h-3.5 text-blue-600" />
+              <span>Storage: <strong className="text-zinc-900">property-files</strong></span>
             </div>
 
             <button
               onClick={onRefresh}
               title="Refresh Data"
-              className="p-1.5 rounded-md hover:bg-zinc-100 text-zinc-600 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-600 transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
@@ -90,22 +83,24 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Navigation Submenu */}
-      <div className="border-t border-zinc-100 bg-zinc-50/50">
+      <div className="border-t border-zinc-100 bg-zinc-50/70">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto py-2 scrollbar-none">
             {navItems.map((item) => {
               const active = activeTab === item.id;
+              const Icon = item.icon;
               return (
                 <button
                   key={item.id}
                   id={`nav-tab-${item.id}`}
                   onClick={() => setActiveTab(item.id)}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-md whitespace-nowrap transition-all ${
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg whitespace-nowrap transition-all flex items-center gap-1.5 ${
                     active
                       ? 'bg-zinc-900 text-white shadow-xs'
                       : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60'
                   }`}
                 >
+                  <Icon className="w-3.5 h-3.5" />
                   {item.label}
                 </button>
               );

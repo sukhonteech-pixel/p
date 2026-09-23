@@ -1,5 +1,3 @@
-import { AutomationJob, AutomationLog, Device, JobOptions } from '../types/automation';
-
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -57,112 +55,369 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+export interface PropertyListItem {
+  id: string;
+  property_no: string;
+  property_name: string;
+  category: string;
+  property_type: string;
+  status: 'Available' | 'Rented' | 'Sold' | 'Pending' | 'Inactive';
+  project_name: string;
+  location: string;
+  zone: string;
+  bedroom: number;
+  bathroom: number;
+  land_area: number;
+  building_area: number;
+  floor: string;
+  year_built: string;
+  furniture: string;
+  pool: string;
+  parking: string;
+  description: string;
+  rent_price: number;
+  sale_price: number;
+  additional_data: Record<string, any>;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+  cover_photo_url: string | null;
+  photos_count: number;
+  files_count: number;
+  contacts: Array<{
+    id: string;
+    contact_name: string;
+    contact_type: string;
+    phone: string;
+    email?: string;
+  }>;
+}
+
+export interface PropertyDetailResponse {
+  property: PropertyListItem;
+  contacts: Array<{
+    id: string;
+    property_id: string;
+    contact_name: string;
+    contact_type: 'Owner' | 'Agent' | 'Co-Agent' | 'Juristic' | 'Cleaning' | 'Other';
+    phone: string;
+    email?: string;
+    note?: string;
+    created_at: string;
+    updated_at: string;
+  }>;
+  photos: Array<{
+    id: string;
+    property_id: string;
+    storage_path: string;
+    file_name: string;
+    public_url: string;
+    sort_order: number;
+    is_cover: boolean;
+    file_size: number;
+    mime_type: string;
+    created_at: string;
+  }>;
+  files: Array<{
+    id: string;
+    property_id: string;
+    storage_path: string;
+    file_name: string;
+    public_url: string;
+    file_size: number;
+    mime_type: string;
+    created_at: string;
+  }>;
+  updateLogs: Array<{
+    id: string;
+    property_id: string;
+    action: string;
+    changed_field?: string;
+    old_value?: string;
+    new_value?: string;
+    user_name: string;
+    created_at: string;
+  }>;
+}
+
+export interface DashboardStats {
+  totalProperties: number;
+  totalPhotos: number;
+  totalFiles: number;
+  propertiesAddedToday: number;
+  totalContacts: number;
+  isSupabaseConnected: boolean;
+}
+
 export const api = {
-  // Health
+  // System Health
   async getHealth() {
-    return request<any>('/api/automation/health');
+    return request<any>('/api/health');
   },
 
-  // Devices
-  async getDevices(): Promise<Device[]> {
-    return request<Device[]>('/api/automation/devices');
+  // Dashboard Stats
+  async getDashboardStats(): Promise<DashboardStats> {
+    return request<DashboardStats>('/api/dashboard/stats');
   },
 
-  async pairDevice(data: { name: string; os?: string; ipAddress?: string; primeDetected?: boolean }): Promise<Device> {
-    return request<Device>('/api/automation/devices/pair', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-  },
-
-  async revokeDevice(id: string) {
-    return request<any>(`/api/automation/devices/${id}/revoke`, { method: 'POST' });
-  },
-
-  async testDevice(id: string) {
-    return request<any>(`/api/automation/devices/${id}/test`, { method: 'POST' });
-  },
-
-  // Jobs
-  async getJobs(): Promise<AutomationJob[]> {
-    return request<AutomationJob[]>('/api/automation/jobs');
-  },
-
-  async getJob(id: string): Promise<{ job: AutomationJob; logs: AutomationLog[] }> {
-    return request<{ job: AutomationJob; logs: AutomationLog[] }>(`/api/automation/jobs/${id}`);
-  },
-
-  async createJob(data: {
-    propertyNo: string;
-    deviceId?: string;
-    options?: Partial<JobOptions>;
-    dryRun?: boolean;
-  }): Promise<AutomationJob> {
-    return request<AutomationJob>('/api/automation/jobs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-  },
-
-  async pauseJob(id: string) {
-    return request<any>(`/api/automation/jobs/${id}/pause`, { method: 'POST' });
-  },
-
-  async resumeJob(id: string) {
-    return request<any>(`/api/automation/jobs/${id}/resume`, { method: 'POST' });
-  },
-
-  async cancelJob(id: string) {
-    return request<any>(`/api/automation/jobs/${id}/cancel`, { method: 'POST' });
-  },
-
-  async emergencyStop(id: string) {
-    return request<any>(`/api/automation/jobs/${id}/emergency-stop`, { method: 'POST' });
-  },
-
-  async retryJob(id: string): Promise<AutomationJob> {
-    return request<AutomationJob>(`/api/automation/jobs/${id}/retry`, { method: 'POST' });
-  },
-
-  async createBatch(data: {
-    propertyNos: string[];
-    deviceId?: string;
-    options?: Partial<JobOptions>;
-    dryRun?: boolean;
-  }): Promise<{ count: number; jobs: AutomationJob[] }> {
-    const result = await request<{ count: number; jobs: AutomationJob[] }>('/api/automation/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-
-    if (!result || !Array.isArray(result.jobs) || result.jobs.length === 0 || !result.count || result.count === 0) {
-      throw new ApiError(
-        'การสร้าง Batch ไม่สำเร็จ: ไม่ได้รับรายการงานที่พร้อมประมวลผลจากเซิร์ฟเวอร์',
-        500,
-        'EMPTY_BATCH_RESPONSE',
-        result
-      );
+  // Properties Query
+  async getProperties(params?: {
+    search?: string;
+    category?: string;
+    status?: string;
+    location?: string;
+    project?: string;
+    bedroom?: number | string;
+    bathroom?: number | string;
+    page?: number;
+    limit?: number;
+    includeArchived?: boolean;
+  }): Promise<{
+    items: PropertyListItem[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }> {
+    const query = new URLSearchParams();
+    if (params) {
+      if (params.search) query.set('search', params.search);
+      if (params.category && params.category !== 'ALL') query.set('category', params.category);
+      if (params.status && params.status !== 'ALL') query.set('status', params.status);
+      if (params.location && params.location !== 'ALL') query.set('location', params.location);
+      if (params.project && params.project !== 'ALL') query.set('project', params.project);
+      if (params.bedroom !== undefined && params.bedroom !== 'ALL') query.set('bedroom', String(params.bedroom));
+      if (params.bathroom !== undefined && params.bathroom !== 'ALL') query.set('bathroom', String(params.bathroom));
+      if (params.page) query.set('page', String(params.page));
+      if (params.limit) query.set('limit', String(params.limit));
+      if (params.includeArchived) query.set('includeArchived', 'true');
     }
-
-    return result;
+    const qStr = query.toString();
+    return request(`/api/properties${qStr ? `?${qStr}` : ''}`);
   },
 
-  // Logs
-  async getLogs(jobId?: string): Promise<AutomationLog[]> {
-    const url = jobId ? `/api/automation/logs?jobId=${encodeURIComponent(jobId)}` : '/api/automation/logs';
-    return request<AutomationLog[]>(url);
+  // Property Detail
+  async getProperty(idOrNo: string): Promise<PropertyDetailResponse> {
+    return request<PropertyDetailResponse>(`/api/properties/${encodeURIComponent(idOrNo)}`);
   },
 
-  // Synced Properties in PEAK Database
-  async getProperties() {
-    return request<any>('/api/automation/properties');
+  // Create Property
+  async createProperty(data: any): Promise<PropertyListItem> {
+    return request<PropertyListItem>('/api/properties', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
   },
 
-  async getProperty(propertyNo: string) {
-    return request<any>(`/api/automation/properties/${encodeURIComponent(propertyNo)}`);
+  // Update Property
+  async updateProperty(id: string, data: any): Promise<PropertyListItem> {
+    return request<PropertyListItem>(`/api/properties/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Archive Property (Soft Delete)
+  async archiveProperty(id: string): Promise<{ success: boolean; property: PropertyListItem }> {
+    return request<{ success: boolean; property: PropertyListItem }>(`/api/properties/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Restore Property
+  async restoreProperty(id: string): Promise<{ success: boolean; property: PropertyListItem }> {
+    return request<{ success: boolean; property: PropertyListItem }>(`/api/properties/${id}/restore`, {
+      method: 'POST',
+    });
+  },
+
+  // Delete Permanently
+  async deletePropertyPermanently(id: string): Promise<{ success: boolean; property: PropertyListItem }> {
+    return request<{ success: boolean; property: PropertyListItem }>(`/api/properties/${id}?permanent=true`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Batch Import Excel
+  async importProperties(
+    items: any[],
+    duplicateStrategy: 'UPDATE' | 'SKIP' | 'CREATE' = 'UPDATE'
+  ): Promise<{
+    total: number;
+    imported: number;
+    updated: number;
+    skipped: number;
+    failedCount: number;
+    failed: Array<{ property_no: string; error: string }>;
+  }> {
+    return request('/api/properties/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, duplicateStrategy }),
+    });
+  },
+
+  // Add Contact
+  async addContact(
+    propertyId: string,
+    data: { contact_name: string; contact_type: string; phone: string; email?: string }
+  ) {
+    return request(`/api/properties/${propertyId}/contacts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Update Contact
+  async updateContact(
+    contactId: string,
+    data: { contact_name?: string; contact_type?: string; phone?: string; email?: string; note?: string }
+  ) {
+    return request(`/api/contacts/${contactId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Delete Contact
+  async deleteContact(contactId: string) {
+    return request(`/api/contacts/${contactId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Download / View URLs (Real Stream from Storage)
+  getPhotoDownloadUrl(photoId: string): string {
+    return `/api/photos/${photoId}/download`;
+  },
+  getPhotoViewUrl(photoId: string): string {
+    return `/api/photos/${photoId}/view`;
+  },
+  getFileDownloadUrl(fileId: string): string {
+    return `/api/files/${fileId}/download`;
+  },
+  getFileViewUrl(fileId: string): string {
+    return `/api/files/${fileId}/view`;
+  },
+
+  // Upload Photos (multiple)
+  async uploadPhotos(propertyId: string, files: File[]) {
+    const formData = new FormData();
+    files.forEach((f) => formData.append('photos', f));
+
+    return request<{ count: number; photos: any[] }>(`/api/properties/${propertyId}/photos`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  // Set Cover Photo
+  async setCoverPhoto(propertyId: string, photoId: string) {
+    return request<{ success: boolean }>(`/api/photos/${photoId}/cover`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ propertyId }),
+    });
+  },
+
+  // Reorder Photos
+  async reorderPhotos(propertyId: string, photoIds: string[]) {
+    return request<{ success: boolean }>(`/api/properties/${propertyId}/photos/reorder`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photoIds }),
+    });
+  },
+
+  // Delete Photo
+  async deletePhoto(photoId: string) {
+    return request<{ success: boolean }>(`/api/photos/${photoId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Upload Files / Documents
+  async uploadFiles(propertyId: string, files: File[]) {
+    const formData = new FormData();
+    files.forEach((f) => formData.append('files', f));
+
+    return request<{ count: number; files: any[] }>(`/api/properties/${propertyId}/files`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  // Delete File
+  async deleteFile(fileId: string) {
+    return request<{ success: boolean }>(`/api/files/${fileId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Update History
+  async getPropertyHistory(propertyId: string) {
+    return request<any[]>(`/api/properties/${propertyId}/history`);
+  },
+
+  // Bulk File Upload: Preview matching
+  async previewBulkFiles(fileNames: string[]): Promise<{
+    total: number;
+    matchedCount: number;
+    unmatchedCount: number;
+    preview: Array<{
+      fileName: string;
+      matched: boolean;
+      property_no: string | null;
+      property_name: string | null;
+      property_id: string | null;
+      file_type: 'photo' | 'document';
+    }>;
+  }> {
+    return request('/api/files/bulk-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileNames }),
+    });
+  },
+
+  // Bulk File Upload: Upload batch
+  async bulkUploadFiles(files: File[]): Promise<{
+    totalFiles: number;
+    matchedCount: number;
+    unmatchedCount: number;
+    uploadedCount: number;
+    matched: Array<{
+      originalName: string;
+      property_id: string;
+      property_no: string;
+      property_name: string;
+      file_type: 'photo' | 'document';
+      recordId: string;
+      publicUrl: string;
+      size: number;
+    }>;
+    unmatched: Array<{
+      originalName: string;
+      reason: string;
+      size: number;
+    }>;
+    errors: Array<{
+      originalName: string;
+      error: string;
+    }>;
+  }> {
+    const formData = new FormData();
+    files.forEach((f) => formData.append('files', f));
+
+    return request('/api/files/bulk-upload', {
+      method: 'POST',
+      body: formData,
+    });
   },
 };
-
