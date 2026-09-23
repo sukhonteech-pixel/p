@@ -1,6 +1,70 @@
 {
   "properties": [
     {
+      "id": "prop-1790161110063-0jym2",
+      "property_no": "TEST-VN999",
+      "property_name": "Test Villa Laguna",
+      "category": "Villa",
+      "property_type": "Residential",
+      "status": "Inactive",
+      "project_name": "",
+      "location": "",
+      "zone": "",
+      "bedroom": 3,
+      "bathroom": 3,
+      "land_area": 450,
+      "building_area": 0,
+      "floor": "",
+      "year_built": "",
+      "furniture": "",
+      "pool": "",
+      "parking": "",
+      "description": "",
+      "rent_price": 0,
+      "sale_price": 15000000,
+      "additional_data": {
+        "_import_batch_id": "batch-1790161110063-k5w31",
+        "_sources": [
+          {
+            "fileName": "Excel_A_Property.xlsx",
+            "rowNumber": 2,
+            "fieldsProvided": [
+              "bedroom",
+              "bathroom"
+            ]
+          },
+          {
+            "fileName": "Excel_B_Phone.xlsx",
+            "rowNumber": 5,
+            "fieldsProvided": [
+              "phone"
+            ]
+          },
+          {
+            "fileName": "Excel_C_Owner.xlsx",
+            "rowNumber": 3,
+            "fieldsProvided": [
+              "owner",
+              "phone"
+            ]
+          },
+          {
+            "fileName": "Excel_D_Price.xlsx",
+            "rowNumber": 4,
+            "fieldsProvided": [
+              "sale_price"
+            ]
+          }
+        ],
+        "_created_via": "excel_merge",
+        "_last_batch_id": "batch-1790161118045-vm1cd",
+        "_last_merged_at": "2026-09-23T10:58:38.045Z"
+      },
+      "is_archived": true,
+      "created_at": "2026-09-23T10:58:30.063Z",
+      "updated_at": "2026-09-23T10:58:46.624Z"
+    },
+    {
       "id": "prop-1790159519974-fbkmv",
       "property_no": "VN570",
       "property_name": "Villa Natura 570",
@@ -10055,7 +10119,30 @@
       "updated_at": "2026-09-23T10:12:58.332Z"
     }
   ],
-  "contacts": [],
+  "contacts": [
+    {
+      "id": "cnt-1790161110063-h34g",
+      "property_id": "prop-1790161110063-0jym2",
+      "contact_name": "Khun Somchai",
+      "contact_type": "Owner",
+      "phone": "0812345678",
+      "email": "",
+      "note": "",
+      "created_at": "2026-09-23T10:58:30.063Z",
+      "updated_at": "2026-09-23T10:58:30.063Z"
+    },
+    {
+      "id": "cnt-1790161118050-cdcc",
+      "property_id": "prop-1790161110063-0jym2",
+      "contact_name": "John Wick",
+      "contact_type": "Owner",
+      "phone": "0899999999",
+      "email": "",
+      "note": "",
+      "created_at": "2026-09-23T10:58:38.050Z",
+      "updated_at": "2026-09-23T10:58:38.050Z"
+    }
+  ],
   "photos": [
     {
       "id": "photo-1790159525574-r5ft",
@@ -10092,6 +10179,126 @@
       "file_size": 20,
       "mime_type": "image/jpeg",
       "created_at": "2026-09-23T10:32:05.585Z"
+    },
+    {
+      "id": "photo-1790159997831-y6i9",
+      "property_id": "prop-1790158378983-xl3q5",
+      "storage_path": "property-files/CL1093/photos/1790159997831-9y4o.jpg",
+      "file_name": "CL1093_35b862441fd04633a538f3d304f147db.jpg",
+      "public_url": "/uploads/CL1093/photos/1790159997831-9y4o.jpg",
+      "sort_order": 1,
+      "is_cover": true,
+      "file_size": 175059,
+      "mime_type": "image/jpeg",
+      "created_at": "2026-09-23T10:39:57.831Z"
+    },
+    {
+      "id": "photo-1790159997835-02vn",
+      "property_id": "prop-1790158378983-xl3q5",
+      "storage_path": "property-files/CL1093/photos/1790159997835-8pwn.jpg",
+      "file_name": "CL1093_e66342e65d5b4b229b925337c2b24273.jpg",
+      "public_url": "/uploads/CL1093/photos/1790159997835-8pwn.jpg",
+      "sort_order": 2,
+      "is_cover": false,
+      "file_size": 155027,
+      "mime_type": "image/jpeg",
+      "created_at": "2026-09-23T10:39:57.835Z"
+    },
+    {
+      "id": "photo-1790159997839-sfc0",
+      "property_id": "prop-1790158378983-xl3q5",
+      "storage_path": "property-files/CL1093/photos/1790159997839-8j0d.jpg",
+      "file_name": "CL1093_5a72306c7a6e4bddb94305fcfc357024.jpg",
+      "public_url": "/uploads/CL1093/photos/1790159997839-8j0d.jpg",
+      "sort_order": 3,
+      "is_cover": false,
+      "file_size": 68215,
+      "mime_type": "image/jpeg",
+      "created_at": "2026-09-23T10:39:57.839Z"
+    },
+    {
+      "id": "photo-1790159997843-ekry",
+      "property_id": "prop-1790158378983-xl3q5",
+      "storage_path": "property-files/CL1093/photos/1790159997843-mncc.jpg",
+      "file_name": "CL1093_b1c34da895f9461298d1d0c2062ff8d0.jpg",
+      "public_url": "/uploads/CL1093/photos/1790159997843-mncc.jpg",
+      "sort_order": 4,
+      "is_cover": false,
+      "file_size": 172441,
+      "mime_type": "image/jpeg",
+      "created_at": "2026-09-23T10:39:57.843Z"
+    },
+    {
+      "id": "photo-1790159997847-cipa",
+      "property_id": "prop-1790158378983-xl3q5",
+      "storage_path": "property-files/CL1093/photos/1790159997847-sq8p.jpg",
+      "file_name": "CL1093_b1479659a76d49b08164c2f1d16aac30.jpg",
+      "public_url": "/uploads/CL1093/photos/1790159997847-sq8p.jpg",
+      "sort_order": 5,
+      "is_cover": false,
+      "file_size": 85815,
+      "mime_type": "image/jpeg",
+      "created_at": "2026-09-23T10:39:57.847Z"
+    },
+    {
+      "id": "photo-1790159997851-300p",
+      "property_id": "prop-1790158378983-xl3q5",
+      "storage_path": "property-files/CL1093/photos/1790159997851-wcqn.jpg",
+      "file_name": "CL1093_68eee51a81354bb28efd9b70d15a59c4.jpg",
+      "public_url": "/uploads/CL1093/photos/1790159997851-wcqn.jpg",
+      "sort_order": 6,
+      "is_cover": false,
+      "file_size": 113840,
+      "mime_type": "image/jpeg",
+      "created_at": "2026-09-23T10:39:57.851Z"
+    },
+    {
+      "id": "photo-1790159997855-45mx",
+      "property_id": "prop-1790158378983-xl3q5",
+      "storage_path": "property-files/CL1093/photos/1790159997855-ug37.jpg",
+      "file_name": "CL1093_633c98c57c0842b2b3e3de342a67c282.jpg",
+      "public_url": "/uploads/CL1093/photos/1790159997855-ug37.jpg",
+      "sort_order": 7,
+      "is_cover": false,
+      "file_size": 201019,
+      "mime_type": "image/jpeg",
+      "created_at": "2026-09-23T10:39:57.855Z"
+    },
+    {
+      "id": "photo-1790159997859-czcn",
+      "property_id": "prop-1790158378983-xl3q5",
+      "storage_path": "property-files/CL1093/photos/1790159997859-jenl.jpg",
+      "file_name": "CL1093_a3c6784398b4497a88f45b5b46e19e8b.jpg",
+      "public_url": "/uploads/CL1093/photos/1790159997859-jenl.jpg",
+      "sort_order": 8,
+      "is_cover": false,
+      "file_size": 99382,
+      "mime_type": "image/jpeg",
+      "created_at": "2026-09-23T10:39:57.859Z"
+    },
+    {
+      "id": "photo-1790159997863-ljsg",
+      "property_id": "prop-1790158378983-xl3q5",
+      "storage_path": "property-files/CL1093/photos/1790159997863-w5pl.jpg",
+      "file_name": "CL1093_6ef017f80b9c4239b4cc888ab8d51476.jpg",
+      "public_url": "/uploads/CL1093/photos/1790159997863-w5pl.jpg",
+      "sort_order": 9,
+      "is_cover": false,
+      "file_size": 168964,
+      "mime_type": "image/jpeg",
+      "created_at": "2026-09-23T10:39:57.863Z"
+    },
+    {
+      "id": "photo-1790159997867-bp30",
+      "property_id": "prop-1790158378983-xl3q5",
+      "storage_path": "property-files/CL1093/photos/1790159997867-v25o.jpg",
+      "file_name": "CL1093_93e4cdb4dbf740abb94def4a17390911.jpg",
+      "public_url": "/uploads/CL1093/photos/1790159997867-v25o.jpg",
+      "sort_order": 10,
+      "is_cover": false,
+      "file_size": 193637,
+      "mime_type": "image/jpeg",
+      "created_at": "2026-09-23T10:39:57.867Z"
     }
   ],
   "files": [
@@ -10117,6 +10324,144 @@
     }
   ],
   "updateLogs": [
+    {
+      "id": "log-1790161126630-f67e",
+      "property_id": "prop-1790161110063-0jym2",
+      "action": "Archived",
+      "changed_field": "is_archived",
+      "old_value": "false",
+      "new_value": "true",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:58:46.630Z"
+    },
+    {
+      "id": "log-1790161126624-hnwn",
+      "property_id": "prop-1790161110063-0jym2",
+      "action": "Updated",
+      "changed_field": "status",
+      "old_value": "Available",
+      "new_value": "Inactive",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:58:46.624Z"
+    },
+    {
+      "id": "log-1790161118050-dvvf",
+      "property_id": "prop-1790161110063-0jym2",
+      "action": "Contact Added",
+      "changed_field": "contact",
+      "new_value": "Owner: John Wick (0899999999)",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:58:38.050Z"
+    },
+    {
+      "id": "log-1790161118045-yzpv",
+      "property_id": "prop-1790161110063-0jym2",
+      "action": "Updated",
+      "changed_field": "land_area",
+      "old_value": "0",
+      "new_value": "450",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:58:38.045Z"
+    },
+    {
+      "id": "log-1790161110063-y507",
+      "property_id": "prop-1790161110063-0jym2",
+      "action": "Created via Multi-Excel Merge",
+      "changed_field": "All",
+      "new_value": "Created property TEST-VN999 from 2 Excel sources",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:58:30.063Z"
+    },
+    {
+      "id": "log-1790159997867-uhuw",
+      "property_id": "prop-1790158378983-xl3q5",
+      "action": "Photo Uploaded",
+      "changed_field": "photos",
+      "new_value": "CL1093_93e4cdb4dbf740abb94def4a17390911.jpg",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:39:57.867Z"
+    },
+    {
+      "id": "log-1790159997863-5qno",
+      "property_id": "prop-1790158378983-xl3q5",
+      "action": "Photo Uploaded",
+      "changed_field": "photos",
+      "new_value": "CL1093_6ef017f80b9c4239b4cc888ab8d51476.jpg",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:39:57.863Z"
+    },
+    {
+      "id": "log-1790159997859-vne0",
+      "property_id": "prop-1790158378983-xl3q5",
+      "action": "Photo Uploaded",
+      "changed_field": "photos",
+      "new_value": "CL1093_a3c6784398b4497a88f45b5b46e19e8b.jpg",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:39:57.859Z"
+    },
+    {
+      "id": "log-1790159997855-mngi",
+      "property_id": "prop-1790158378983-xl3q5",
+      "action": "Photo Uploaded",
+      "changed_field": "photos",
+      "new_value": "CL1093_633c98c57c0842b2b3e3de342a67c282.jpg",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:39:57.855Z"
+    },
+    {
+      "id": "log-1790159997851-pqrc",
+      "property_id": "prop-1790158378983-xl3q5",
+      "action": "Photo Uploaded",
+      "changed_field": "photos",
+      "new_value": "CL1093_68eee51a81354bb28efd9b70d15a59c4.jpg",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:39:57.851Z"
+    },
+    {
+      "id": "log-1790159997847-w4s3",
+      "property_id": "prop-1790158378983-xl3q5",
+      "action": "Photo Uploaded",
+      "changed_field": "photos",
+      "new_value": "CL1093_b1479659a76d49b08164c2f1d16aac30.jpg",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:39:57.847Z"
+    },
+    {
+      "id": "log-1790159997843-w7l6",
+      "property_id": "prop-1790158378983-xl3q5",
+      "action": "Photo Uploaded",
+      "changed_field": "photos",
+      "new_value": "CL1093_b1c34da895f9461298d1d0c2062ff8d0.jpg",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:39:57.843Z"
+    },
+    {
+      "id": "log-1790159997839-tkci",
+      "property_id": "prop-1790158378983-xl3q5",
+      "action": "Photo Uploaded",
+      "changed_field": "photos",
+      "new_value": "CL1093_5a72306c7a6e4bddb94305fcfc357024.jpg",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:39:57.839Z"
+    },
+    {
+      "id": "log-1790159997835-letq",
+      "property_id": "prop-1790158378983-xl3q5",
+      "action": "Photo Uploaded",
+      "changed_field": "photos",
+      "new_value": "CL1093_e66342e65d5b4b229b925337c2b24273.jpg",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:39:57.835Z"
+    },
+    {
+      "id": "log-1790159997831-qfhk",
+      "property_id": "prop-1790158378983-xl3q5",
+      "action": "Photo Uploaded",
+      "changed_field": "photos",
+      "new_value": "CL1093_35b862441fd04633a538f3d304f147db.jpg",
+      "user_name": "Admin",
+      "created_at": "2026-09-23T10:39:57.831Z"
+    },
     {
       "id": "log-1790159525589-eptw",
       "property_id": "prop-1790159519974-fbkmv",
@@ -12519,6 +12864,50 @@
       "new_value": "Created property KT324",
       "user_name": "Admin",
       "created_at": "2026-09-23T10:12:58.332Z"
+    }
+  ],
+  "importBatches": [
+    {
+      "id": "batch-1790161118045-vm1cd",
+      "batch_name": "Test Batch 2 Merge",
+      "files": [
+        "Excel_C_Owner.xlsx",
+        "Excel_D_Price.xlsx"
+      ],
+      "total_properties": 1,
+      "new_properties": 0,
+      "updated_properties": 1,
+      "contacts_added": 1,
+      "photos_added": 0,
+      "files_added": 0,
+      "conflicts_count": 0,
+      "status": "Completed",
+      "created_at": "2026-09-23T10:58:38.045Z",
+      "created_by": "Admin",
+      "metadata": {
+        "errorCount": 0
+      }
+    },
+    {
+      "id": "batch-1790161110063-k5w31",
+      "batch_name": "Test Batch 1",
+      "files": [
+        "Excel_A_Property.xlsx",
+        "Excel_B_Phone.xlsx"
+      ],
+      "total_properties": 1,
+      "new_properties": 1,
+      "updated_properties": 0,
+      "contacts_added": 1,
+      "photos_added": 0,
+      "files_added": 0,
+      "conflicts_count": 0,
+      "status": "Completed",
+      "created_at": "2026-09-23T10:58:30.063Z",
+      "created_by": "Admin",
+      "metadata": {
+        "errorCount": 0
+      }
     }
   ]
 }

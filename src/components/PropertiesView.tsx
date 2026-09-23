@@ -18,12 +18,14 @@ import {
   ChevronRight,
   RotateCcw,
   Eye,
+  Layers,
 } from 'lucide-react';
 import { PropertyListItem, api } from '../services/api';
 
 interface PropertiesViewProps {
   onSelectProperty: (propertyNo: string) => void;
   onOpenUploadExcel: () => void;
+  onOpenImportMerge?: () => void;
   onOpenAddModal: () => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }
@@ -31,6 +33,7 @@ interface PropertiesViewProps {
 export const PropertiesView: React.FC<PropertiesViewProps> = ({
   onSelectProperty,
   onOpenUploadExcel,
+  onOpenImportMerge,
   onOpenAddModal,
   searchInputRef,
 }) => {
@@ -154,6 +157,17 @@ export const PropertiesView: React.FC<PropertiesViewProps> = ({
               <ListIcon className="w-4 h-4" />
             </button>
           </div>
+
+          {onOpenImportMerge && (
+            <button
+              type="button"
+              onClick={onOpenImportMerge}
+              className="px-3.5 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-900 border border-red-200 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs"
+            >
+              <Layers className="w-3.5 h-3.5 text-red-700" />
+              Import & Merge Excel
+            </button>
+          )}
 
           <button
             type="button"

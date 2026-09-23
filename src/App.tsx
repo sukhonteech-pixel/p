@@ -6,6 +6,7 @@ import { UploadExcelView } from './components/UploadExcelView';
 import { ContactsView } from './components/ContactsView';
 import { FilesView } from './components/FilesView';
 import { SettingsView } from './components/SettingsView';
+import { ImportMergeExcelView } from './components/ImportMergeExcelView';
 import { PropertyDetailModal } from './components/PropertyDetailModal';
 import { AddPropertyModal } from './components/AddPropertyModal';
 import { api, DashboardStats } from './services/api';
@@ -69,8 +70,22 @@ export default function App() {
           <PropertiesView
             onSelectProperty={(pNo) => setSelectedPropertyNo(pNo)}
             onOpenUploadExcel={() => setActiveTab('upload')}
+            onOpenImportMerge={() => setActiveTab('import_merge')}
             onOpenAddModal={() => setShowAddModal(true)}
             searchInputRef={searchInputRef}
+          />
+        )}
+
+        {activeTab === 'import_merge' && (
+          <ImportMergeExcelView
+            onMergeCompleted={() => {
+              loadStats();
+            }}
+            onNavigateToProperties={(pNo) => {
+              setActiveTab('properties');
+              loadStats();
+              if (pNo) setSelectedPropertyNo(pNo);
+            }}
           />
         )}
 

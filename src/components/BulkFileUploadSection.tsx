@@ -74,6 +74,7 @@ export const BulkFileUploadSection: React.FC<BulkFileUploadSectionProps> = ({
   } | null>(null);
 
   const [filterMode, setFilterMode] = useState<'all' | 'matched' | 'unmatched'>('all');
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   // Handle files selected via input or drop
   const handleFilesAdded = async (fileList: FileList | File[]) => {
@@ -82,13 +83,89 @@ export const BulkFileUploadSection: React.FC<BulkFileUploadSectionProps> = ({
 
     setIsAnalyzing(true);
     setUploadResult(null);
+    setErrorBanner(null);
 
     try {
       const fileNames = rawFiles.map((f) => f.name);
-      const previewRes = await api.previewBulkFiles(fileNames);
+      let previewItems: Array<{
+        fileName: string;
+        matched: boolean;
+        property_no: string | null;
+        property_name: string | null;
+        property_id: string | null;
+        file_type: 'photo' | 'document';
+      }> = [];
+
+      try {
+        // 1. Try server-side preview matching first
+        const previewRes = await api.previewBulkFiles(fileNames);
+        previewItems = previewRes.preview;
+      } catch (apiErr: any) {
+        console.warn('Backend preview API unreachable, using client-side fallback matching:', apiErr);
+
+        // 2. Client-side fallback matching
+        let properties: any[] = [];
+        try {
+          const propRes = await api.getProperties({ limit: 1000 });
+          properties = propRes.items || [];
+        } catch {
+          properties = [];
+        }
+
+        previewItems = fileNames.map((fn) => {
+          const ext = fn.split('.').pop()?.toLowerCase() || '';
+          const isPhoto =
+            ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext);
+          const baseName = fn.replace(/\.[^/.]+$/, '').trim();
+
+          // Match against properties in memory/database
+          let foundProp: any = null;
+          const sorted = [...properties].sort((a, b) => b.property_no.length - a.property_no.length);
+          for (const p of sorted) {
+            const pNo = (p.property_no || '').trim();
+            if (!pNo) continue;
+            const escaped = pNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const pattern = new RegExp(`^${escaped}(?:[_\\-\\s\\.\\(\\[].*|$)`, 'i');
+            if (pattern.test(baseName)) {
+              foundProp = p;
+              break;
+            }
+          }
+
+          if (foundProp) {
+            return {
+              fileName: fn,
+              matched: true,
+              property_no: foundProp.property_no,
+              property_name: foundProp.property_name,
+              property_id: foundProp.id,
+              file_type: isPhoto ? 'photo' : 'document',
+            };
+          }
+
+          // Extract candidate prefix from filename (e.g., VN568_01.jpg -> VN568)
+          const candidateMatch = baseName.match(/^([a-zA-Z0-9]+)/);
+          const candidate = candidateMatch ? candidateMatch[1].toUpperCase() : null;
+
+          return {
+            fileName: fn,
+            matched: false,
+            property_no: candidate,
+            property_name: null,
+            property_id: null,
+            file_type: isPhoto ? 'photo' : 'document',
+          };
+        });
+
+        if (properties.length === 0) {
+          setErrorBanner(
+            'คำแนะนำ: ในฐานข้อมูลยังไม่มีรายการทรัพย์สิน (Database: 0 items) ระบบจึงยังไม่สามารถจับคู่ไฟล์กับทรัพย์ได้ กรุณาไปที่แท็บ "Upload Excel" เพื่อนำเข้ารายการทรัพย์สินก่อน'
+          );
+        }
+      }
 
       const items: BulkFileItem[] = rawFiles.map((file, idx) => {
-        const preview = previewRes.preview[idx];
+        const preview = previewItems[idx];
         const ext = file.name.split('.').pop()?.toLowerCase() || '';
         const isPhoto =
           file.type.startsWith('image/') ||
@@ -111,7 +188,7 @@ export const BulkFileUploadSection: React.FC<BulkFileUploadSectionProps> = ({
       setSelectedFiles((prev) => [...prev, ...items]);
     } catch (err: any) {
       console.error('Failed to preview filenames:', err);
-      alert(`วิเคราะห์ชื่อไฟล์ล้มเหลว: ${err.message}`);
+      setErrorBanner(`เกิดข้อผิดพลาดในการวิเคราะห์ไฟล์: ${err.message}`);
     } finally {
       setIsAnalyzing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -149,16 +226,18 @@ export const BulkFileUploadSection: React.FC<BulkFileUploadSectionProps> = ({
   const handleClearAll = () => {
     setSelectedFiles([]);
     setUploadResult(null);
+    setErrorBanner(null);
   };
 
   // Upload matched files
   const handleStartBulkUpload = async () => {
+    setErrorBanner(null);
     const filesToUpload = selectedFiles
       .filter((item) => item.matched)
       .map((item) => item.file);
 
     if (filesToUpload.length === 0) {
-      alert('ไม่มีไฟล์ที่จับคู่กับ Property ได้ กรุณาตรวจสอบชื่อไฟล์');
+      setErrorBanner('ไม่มีไฟล์ที่จับคู่กับ Property ได้ กรุณาตรวจสอบว่ามี Property ในระบบและชื่อไฟล์ขึ้นต้นด้วย Property No');
       return;
     }
 
@@ -174,7 +253,14 @@ export const BulkFileUploadSection: React.FC<BulkFileUploadSectionProps> = ({
       if (onUploadSuccess) onUploadSuccess();
     } catch (err: any) {
       console.error('Bulk upload error:', err);
-      alert(`อัปโหลดล้มเหลว: ${err.message}`);
+      const is404 = err.status === 404 || (err.message && err.message.includes('404'));
+      if (is404) {
+        setErrorBanner(
+          'HTTP 404 Not Found: ไม่พบ API Endpoint สำหรับการอัปโหลดไฟล์ หากใช้งานบน Vercel ให้ตรวจสอบว่าได้ Deploy ไฟล์ vercel.json และ api/index.ts เพื่อเปิดใช้งาน Serverless Function'
+        );
+      } else {
+        setErrorBanner(`อัปโหลดล้มเหลว: ${err.message || 'Server error'}`);
+      }
     } finally {
       setIsUploading(false);
     }
@@ -232,6 +318,26 @@ export const BulkFileUploadSection: React.FC<BulkFileUploadSectionProps> = ({
       </div>
 
       <div className="p-5 sm:p-6 space-y-6">
+        {/* Error / Instruction Banner */}
+        {errorBanner && (
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start justify-between gap-3 shadow-2xs">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-bold block">แจ้งเตือน / คำแนะนำ:</span>
+                <span className="leading-relaxed">{errorBanner}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setErrorBanner(null)}
+              className="text-amber-700 hover:text-amber-900 text-xs font-bold p-1 cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Drag & Drop Upload Zone */}
         <div
           onDragOver={handleDragOver}

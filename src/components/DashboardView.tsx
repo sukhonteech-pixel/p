@@ -10,6 +10,7 @@ import {
   Database,
   ArrowRight,
   Sparkles,
+  Layers,
 } from 'lucide-react';
 import { DashboardStats } from '../services/api';
 
@@ -47,16 +48,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               type="button"
+              onClick={() => onNavigateTab('import_merge')}
+              className="px-4 py-2.5 rounded-xl bg-red-800 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+            >
+              <Layers className="w-4 h-4" />
+              Import & Merge Excel (รวมหลายไฟล์)
+            </button>
+            <button
+              type="button"
               onClick={() => onNavigateTab('upload')}
-              className="px-4 py-2.5 rounded-xl bg-red-800 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+              className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
             >
               <Upload className="w-4 h-4" />
-              + Upload Excel
+              Upload Excel (เดิม)
             </button>
             <button
               type="button"
               onClick={onOpenAddModal}
-              className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-100 text-zinc-900 text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+              className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-100 text-zinc-900 text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               + Add Property

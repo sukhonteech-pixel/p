@@ -78,15 +78,33 @@ export interface PropertyUpdateLogRecord {
   created_at: string;
 }
 
+export interface ImportBatchRecord {
+  id: string;
+  batch_name: string;
+  files: string[];
+  total_properties: number;
+  new_properties: number;
+  updated_properties: number;
+  contacts_added: number;
+  photos_added: number;
+  files_added: number;
+  conflicts_count: number;
+  status: 'Completed' | 'Rolled_Back';
+  created_at: string;
+  created_by: string;
+  metadata?: any;
+}
+
 class PeakDatabaseService {
   private supabase: SupabaseClient | null = null;
   private isSupabaseConnected = false;
   private storageBucket = 'property-files';
 
   // Persistent File-backed Database Store (ensures 100% data persistence without mock data)
-  private dataDir = path.join(process.cwd(), 'server', 'data');
-  private uploadDir = path.join(process.cwd(), 'public', 'uploads');
-  private storeFile = path.join(process.cwd(), 'server', 'data', 'store.json');
+  private isVercel = !!process.env.VERCEL || !!process.env.NOW_REGION;
+  private dataDir: string;
+  private uploadDir: string;
+  private storeFile: string;
 
   private memoryStore: {
     properties: PropertyRecord[];
@@ -94,26 +112,47 @@ class PeakDatabaseService {
     photos: PropertyPhotoRecord[];
     files: PropertyFileRecord[];
     updateLogs: PropertyUpdateLogRecord[];
+    importBatches: ImportBatchRecord[];
   } = {
     properties: [],
     contacts: [],
     photos: [],
     files: [],
     updateLogs: [],
+    importBatches: [],
   };
 
   constructor() {
+    // On Vercel / serverless lambda, /var/task is read-only, so writable files must live in /tmp
+    if (this.isVercel) {
+      this.dataDir = path.join('/tmp', 'peak_data');
+      this.uploadDir = path.join('/tmp', 'peak_uploads');
+      this.storeFile = path.join(this.dataDir, 'store.json');
+    } else {
+      this.dataDir = path.join(process.cwd(), 'server', 'data');
+      this.uploadDir = path.join(process.cwd(), 'public', 'uploads');
+      this.storeFile = path.join(process.cwd(), 'server', 'data', 'store.json');
+    }
+
     this.initFileSystem();
     this.initSupabase();
     this.loadStore();
   }
 
+  public getUploadDir(): string {
+    return this.uploadDir;
+  }
+
   private initFileSystem() {
-    if (!fs.existsSync(this.dataDir)) {
-      fs.mkdirSync(this.dataDir, { recursive: true });
-    }
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true });
+    try {
+      if (!fs.existsSync(this.dataDir)) {
+        fs.mkdirSync(this.dataDir, { recursive: true });
+      }
+      if (!fs.existsSync(this.uploadDir)) {
+        fs.mkdirSync(this.uploadDir, { recursive: true });
+      }
+    } catch (err) {
+      console.warn('[Database] Warning creating filesystem directories:', err);
     }
   }
 
@@ -142,8 +181,16 @@ class PeakDatabaseService {
 
   private loadStore() {
     try {
-      if (fs.existsSync(this.storeFile)) {
-        const raw = fs.readFileSync(this.storeFile, 'utf-8');
+      let fileToRead = this.storeFile;
+      if (!fs.existsSync(fileToRead)) {
+        const bundledStore = path.join(process.cwd(), 'server', 'data', 'store.json');
+        if (fs.existsSync(bundledStore)) {
+          fileToRead = bundledStore;
+        }
+      }
+
+      if (fs.existsSync(fileToRead)) {
+        const raw = fs.readFileSync(fileToRead, 'utf-8');
         const parsed = JSON.parse(raw);
         this.memoryStore = {
           properties: parsed.properties || [],
@@ -151,8 +198,13 @@ class PeakDatabaseService {
           photos: parsed.photos || [],
           files: parsed.files || [],
           updateLogs: parsed.updateLogs || [],
+          importBatches: parsed.importBatches || [],
         };
-        console.log(`[Database] Loaded ${this.memoryStore.properties.length} properties from storage.`);
+        console.log(`[Database] Loaded ${this.memoryStore.properties.length} properties and ${this.memoryStore.importBatches.length} import batches from storage.`);
+        // If we loaded bundled store on Vercel, copy it to /tmp store
+        if (fileToRead !== this.storeFile) {
+          this.saveStore();
+        }
       } else {
         // Start completely empty (No mocks, no fake items!)
         this.memoryStore = {
@@ -161,6 +213,7 @@ class PeakDatabaseService {
           photos: [],
           files: [],
           updateLogs: [],
+          importBatches: [],
         };
         this.saveStore();
       }
@@ -171,9 +224,13 @@ class PeakDatabaseService {
 
   private saveStore() {
     try {
+      const dir = path.dirname(this.storeFile);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
       fs.writeFileSync(this.storeFile, JSON.stringify(this.memoryStore, null, 2), 'utf-8');
     } catch (e) {
-      console.error('[Database] Error saving store file:', e);
+      console.warn('[Database] Could not write store file (read-only environment):', e);
     }
   }
 
@@ -1276,6 +1333,552 @@ class PeakDatabaseService {
       unmatched,
       errors,
     };
+  }
+
+  // ==============================================================================
+  // MULTI-EXCEL MERGE & IMPORT ENGINE
+  // ==============================================================================
+
+  // Preview properties and detect conflicts before merging
+  previewMergeProperties(items: Array<{
+    property_no: string;
+    property_name?: string;
+    category?: string;
+    property_type?: string;
+    status?: string;
+    project_name?: string;
+    location?: string;
+    zone?: string;
+    bedroom?: number;
+    bathroom?: number;
+    land_area?: number;
+    building_area?: number;
+    floor?: string;
+    year_built?: string;
+    furniture?: string;
+    pool?: string;
+    parking?: string;
+    description?: string;
+    rent_price?: number;
+    sale_price?: number;
+    additional_data?: Record<string, any>;
+    contacts?: Array<{
+      contact_name?: string;
+      contact_type?: 'Owner' | 'Agent' | 'Co-Agent' | 'Juristic' | 'Cleaning' | 'Other';
+      phone: string;
+      email?: string;
+      source?: { fileName: string; sheetName?: string; rowNumber?: number };
+    }>;
+    photo_names?: string[];
+    file_names?: string[];
+    sources?: Array<{
+      fileName: string;
+      sheetName?: string;
+      rowNumber?: number;
+      fieldsProvided?: string[];
+    }>;
+    filesFound?: string[];
+    fieldTraces?: Record<string, any[]>;
+  }>) {
+    const compareFields: (keyof PropertyRecord)[] = [
+      'property_name',
+      'category',
+      'property_type',
+      'status',
+      'project_name',
+      'location',
+      'zone',
+      'bedroom',
+      'bathroom',
+      'land_area',
+      'building_area',
+      'floor',
+      'year_built',
+      'furniture',
+      'pool',
+      'parking',
+      'description',
+      'rent_price',
+      'sale_price',
+    ];
+
+    let totalNew = 0;
+    let totalExisting = 0;
+    let totalConflicts = 0;
+
+    const previewList = items.map((item) => {
+      const cleanNo = (item.property_no || '').trim().toUpperCase();
+      const existing = this.memoryStore.properties.find((p) => p.property_no === cleanNo);
+      const isExisting = !!existing;
+
+      if (isExisting) {
+        totalExisting++;
+      } else {
+        totalNew++;
+      }
+
+      const existingContacts = existing
+        ? this.memoryStore.contacts.filter((c) => c.property_id === existing.id)
+        : [];
+
+      // Detect conflicts and incoming fields
+      const conflicts: Array<{
+        field: string;
+        label: string;
+        dbValue: any;
+        excelValue: any;
+        excelSource?: any;
+      }> = [];
+
+      let newFieldsCount = 0;
+
+      if (existing) {
+        for (const field of compareFields) {
+          const excelVal = (item as any)[field];
+          const dbVal = existing[field];
+
+          const hasExcelVal =
+            excelVal !== undefined &&
+            excelVal !== null &&
+            excelVal !== '' &&
+            excelVal !== 0;
+
+          const hasDbVal =
+            dbVal !== undefined &&
+            dbVal !== null &&
+            dbVal !== '' &&
+            dbVal !== 0;
+
+          if (hasExcelVal && !hasDbVal) {
+            newFieldsCount++;
+          } else if (hasExcelVal && hasDbVal) {
+            // Compare values
+            const strDb = String(dbVal).trim().toLowerCase();
+            const strExcel = String(excelVal).trim().toLowerCase();
+            if (strDb !== strExcel) {
+              conflicts.push({
+                field: String(field),
+                label: this.getFieldLabel(String(field)),
+                dbValue: dbVal,
+                excelValue: excelVal,
+                excelSource: item.fieldTraces?.[field]?.[0]?.source,
+              });
+              totalConflicts++;
+            }
+          }
+        }
+      } else {
+        // All non-empty fields in item are new fields
+        for (const field of compareFields) {
+          const excelVal = (item as any)[field];
+          if (
+            excelVal !== undefined &&
+            excelVal !== null &&
+            excelVal !== '' &&
+            excelVal !== 0
+          ) {
+            newFieldsCount++;
+          }
+        }
+      }
+
+      // Detect new contacts
+      const incomingContacts = item.contacts || [];
+      const newContactsCount = incomingContacts.filter((inc) => {
+        const cleanIncPhone = (inc.phone || '').replace(/[^0-9+]/g, '');
+        return !existingContacts.some(
+          (ex) => (ex.phone || '').replace(/[^0-9+]/g, '') === cleanIncPhone
+        );
+      }).length;
+
+      return {
+        property_no: cleanNo,
+        filesFound: item.filesFound || item.sources?.map((s) => s.fileName) || [],
+        isExisting,
+        existingId: existing?.id || null,
+        existingData: existing || null,
+        incomingData: item,
+        conflicts,
+        hasConflicts: conflicts.length > 0,
+        newFieldsCount,
+        newContactsCount,
+        sources: item.sources || [],
+        fieldTraces: item.fieldTraces || {},
+      };
+    });
+
+    return {
+      total: items.length,
+      newPropertiesCount: totalNew,
+      existingPropertiesCount: totalExisting,
+      totalConflicts,
+      preview: previewList,
+    };
+  }
+
+  // Execute Safe Merge & Import
+  async mergeImportProperties(
+    items: Array<{
+      property_no: string;
+      property_name?: string;
+      category?: string;
+      property_type?: string;
+      status?: string;
+      project_name?: string;
+      location?: string;
+      zone?: string;
+      bedroom?: number;
+      bathroom?: number;
+      land_area?: number;
+      building_area?: number;
+      floor?: string;
+      year_built?: string;
+      furniture?: string;
+      pool?: string;
+      parking?: string;
+      description?: string;
+      rent_price?: number;
+      sale_price?: number;
+      additional_data?: Record<string, any>;
+      contacts?: Array<{
+        contact_name?: string;
+        contact_type?: 'Owner' | 'Agent' | 'Co-Agent' | 'Juristic' | 'Cleaning' | 'Other';
+        phone: string;
+        email?: string;
+        source?: { fileName: string; sheetName?: string; rowNumber?: number };
+      }>;
+      photo_names?: string[];
+      file_names?: string[];
+      sources?: Array<{
+        fileName: string;
+        sheetName?: string;
+        rowNumber?: number;
+        fieldsProvided?: string[];
+      }>;
+      resolvedConflicts?: Record<string, 'keep_existing' | 'use_excel' | 'skip'>;
+    }>,
+    options: {
+      batchName?: string;
+      fileNames: string[];
+      defaultConflictResolution?: 'keep_existing' | 'use_excel' | 'skip';
+      user?: string;
+    }
+  ) {
+    const user = options.user || 'Admin';
+    const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+
+    let newCount = 0;
+    let updatedCount = 0;
+    let contactsAdded = 0;
+    let conflictsResolved = 0;
+    const errors: Array<{ property_no: string; error: string }> = [];
+
+    const fieldKeys: (keyof PropertyRecord)[] = [
+      'property_name',
+      'category',
+      'property_type',
+      'status',
+      'project_name',
+      'location',
+      'zone',
+      'bedroom',
+      'bathroom',
+      'land_area',
+      'building_area',
+      'floor',
+      'year_built',
+      'furniture',
+      'pool',
+      'parking',
+      'description',
+      'rent_price',
+      'sale_price',
+    ];
+
+    for (const item of items) {
+      try {
+        const cleanNo = (item.property_no || '').trim().toUpperCase();
+        if (!cleanNo) {
+          errors.push({ property_no: 'UNKNOWN', error: 'Missing or empty Property No' });
+          continue;
+        }
+
+        const existing = this.memoryStore.properties.find((p) => p.property_no === cleanNo);
+
+        if (!existing) {
+          // ==========================================
+          // 1. CREATE NEW PROPERTY
+          // ==========================================
+          const newPropertyId = `prop-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+          const newRecord: PropertyRecord = {
+            id: newPropertyId,
+            property_no: cleanNo,
+            property_name: item.property_name?.trim() || cleanNo,
+            category: item.category?.trim() || 'Condominium',
+            property_type: item.property_type?.trim() || 'Residential',
+            status: (item.status as any) || 'Available',
+            project_name: item.project_name?.trim() || '',
+            location: item.location?.trim() || '',
+            zone: item.zone?.trim() || '',
+            bedroom: Number(item.bedroom) || 0,
+            bathroom: Number(item.bathroom) || 0,
+            land_area: Number(item.land_area) || 0,
+            building_area: Number(item.building_area) || 0,
+            floor: String(item.floor || ''),
+            year_built: String(item.year_built || ''),
+            furniture: item.furniture?.trim() || '',
+            pool: item.pool?.trim() || '',
+            parking: item.parking?.trim() || '',
+            description: item.description?.trim() || '',
+            rent_price: Number(item.rent_price) || 0,
+            sale_price: Number(item.sale_price) || 0,
+            additional_data: {
+              ...(item.additional_data || {}),
+              _import_batch_id: batchId,
+              _sources: item.sources || [],
+              _created_via: 'excel_merge',
+            },
+            is_archived: false,
+            created_at: now,
+            updated_at: now,
+          };
+
+          this.memoryStore.properties.unshift(newRecord);
+
+          // Add Contacts
+          if (item.contacts && Array.isArray(item.contacts)) {
+            const addedPhones = new Set<string>();
+            for (const c of item.contacts) {
+              const cleanPhone = (c.phone || '').trim();
+              if (cleanPhone && !addedPhones.has(cleanPhone)) {
+                addedPhones.add(cleanPhone);
+                const contactRecord: PropertyContactRecord = {
+                  id: `cnt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                  property_id: newPropertyId,
+                  contact_name: c.contact_name?.trim() || 'Owner',
+                  contact_type: c.contact_type || 'Owner',
+                  phone: cleanPhone,
+                  email: c.email?.trim() || '',
+                  note: c.source?.fileName ? `Source: ${c.source.fileName}` : '',
+                  created_at: now,
+                  updated_at: now,
+                };
+                this.memoryStore.contacts.push(contactRecord);
+                contactsAdded++;
+              }
+            }
+          }
+
+          // History log
+          this.memoryStore.updateLogs.unshift({
+            id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            property_id: newPropertyId,
+            action: 'Created via Multi-Excel Merge',
+            changed_field: 'All',
+            new_value: `Created property ${cleanNo} from ${(item.sources || []).length} Excel sources`,
+            user_name: user,
+            created_at: now,
+          });
+
+          newCount++;
+
+          // Mirror to Supabase if connected
+          if (this.supabase) {
+            (async () => {
+              try {
+                await this.supabase!.from('properties').insert([newRecord]);
+              } catch (err) {
+                console.error('[Supabase Mirror] Error inserting merged property:', err);
+              }
+            })();
+          }
+        } else {
+          // ==========================================
+          // 2. SAFE MERGE INTO EXISTING PROPERTY
+          // ==========================================
+          const updates: Partial<PropertyRecord> = {};
+
+          for (const key of fieldKeys) {
+            const excelVal = (item as any)[key];
+            const dbVal = existing[key];
+
+            const hasExcelVal =
+              excelVal !== undefined &&
+              excelVal !== null &&
+              excelVal !== '' &&
+              excelVal !== 0;
+
+            const hasDbVal =
+              dbVal !== undefined &&
+              dbVal !== null &&
+              dbVal !== '' &&
+              dbVal !== 0;
+
+            if (hasExcelVal && !hasDbVal) {
+              // Safe fill empty DB field
+              (updates as any)[key] = excelVal;
+            } else if (hasExcelVal && hasDbVal) {
+              const strDb = String(dbVal).trim().toLowerCase();
+              const strExcel = String(excelVal).trim().toLowerCase();
+
+              if (strDb !== strExcel) {
+                // Conflict resolution
+                const resolution =
+                  item.resolvedConflicts?.[String(key)] ||
+                  options.defaultConflictResolution ||
+                  'keep_existing';
+
+                if (resolution === 'use_excel') {
+                  (updates as any)[key] = excelVal;
+                  conflictsResolved++;
+                }
+                // If keep_existing, leave dbVal unchanged
+              }
+            }
+          }
+
+          // Merge additional_data and track sources
+          const existingSources = (existing.additional_data?._sources as any[]) || [];
+          const combinedSources = [...existingSources, ...(item.sources || [])];
+
+          updates.additional_data = {
+            ...(existing.additional_data || {}),
+            ...(item.additional_data || {}),
+            _last_batch_id: batchId,
+            _last_merged_at: now,
+            _sources: combinedSources,
+          };
+
+          await this.updateProperty(existing.id, updates, user);
+
+          // Multiple Contacts Safe Merge (Deduplicate only identical phone)
+          if (item.contacts && Array.isArray(item.contacts)) {
+            const existingPhones = new Set(
+              this.memoryStore.contacts
+                .filter((c) => c.property_id === existing.id)
+                .map((c) => (c.phone || '').replace(/[^0-9+]/g, ''))
+            );
+
+            for (const c of item.contacts) {
+              const cleanPhone = (c.phone || '').trim();
+              const numOnly = cleanPhone.replace(/[^0-9+]/g, '');
+
+              if (cleanPhone && !existingPhones.has(numOnly)) {
+                existingPhones.add(numOnly);
+                await this.addContact(
+                  existing.id,
+                  {
+                    contact_name: c.contact_name?.trim() || 'Owner',
+                    contact_type: c.contact_type || 'Owner',
+                    phone: cleanPhone,
+                    email: c.email?.trim() || '',
+                    note: c.source?.fileName ? `Source: ${c.source.fileName}` : '',
+                  },
+                  user
+                );
+                contactsAdded++;
+              }
+            }
+          }
+
+          updatedCount++;
+        }
+      } catch (err: any) {
+        errors.push({
+          property_no: item.property_no || 'UNKNOWN',
+          error: err.message || 'Error merging property',
+        });
+      }
+    }
+
+    // Record Batch History
+    const batchRecord: ImportBatchRecord = {
+      id: batchId,
+      batch_name: options.batchName || `Batch ${new Date().toLocaleDateString('th-TH')} ${new Date().toLocaleTimeString('th-TH')}`,
+      files: options.fileNames || [],
+      total_properties: items.length,
+      new_properties: newCount,
+      updated_properties: updatedCount,
+      contacts_added: contactsAdded,
+      photos_added: 0,
+      files_added: 0,
+      conflicts_count: conflictsResolved,
+      status: 'Completed',
+      created_at: now,
+      created_by: user,
+      metadata: {
+        errorCount: errors.length,
+      },
+    };
+
+    this.memoryStore.importBatches.unshift(batchRecord);
+    this.saveStore();
+
+    // Mirror batch to Supabase if connected
+    if (this.supabase) {
+      (async () => {
+        try {
+          await this.supabase!.from('import_history').insert([batchRecord]);
+        } catch (err) {
+          console.warn('[Supabase Mirror] Note: import_history table not configured yet:', err);
+        }
+      })();
+    }
+
+    return {
+      success: true,
+      batch: batchRecord,
+      summary: {
+        totalProperties: items.length,
+        newProperties: newCount,
+        updatedProperties: updatedCount,
+        contactsAdded,
+        photosAdded: 0,
+        filesAdded: 0,
+        conflictsResolved,
+        errorsCount: errors.length,
+        errors,
+      },
+    };
+  }
+
+  // Get list of import batches
+  getImportBatches(): ImportBatchRecord[] {
+    return [...this.memoryStore.importBatches].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }
+
+  // Get single import batch
+  getImportBatchById(batchId: string): ImportBatchRecord | null {
+    return this.memoryStore.importBatches.find((b) => b.id === batchId) || null;
+  }
+
+  private getFieldLabel(field: string): string {
+    const labels: Record<string, string> = {
+      property_name: 'ชื่อทรัพย์ / โครงการ',
+      category: 'หมวดหมู่',
+      property_type: 'ประเภท',
+      status: 'สถานะ',
+      project_name: 'ชื่อโครงการ',
+      location: 'ทำเล / ที่ตั้ง',
+      zone: 'โซน',
+      bedroom: 'ห้องนอน',
+      bathroom: 'ห้องน้ำ',
+      land_area: 'เนื้อที่ (ตร.ว.)',
+      building_area: 'พื้นที่ใช้สอย (ตร.ม.)',
+      floor: 'ชั้น',
+      year_built: 'ปีที่สร้าง',
+      furniture: 'เฟอร์นิเจอร์',
+      pool: 'สระว่ายน้ำ',
+      parking: 'ที่จอดรถ',
+      description: 'รายละเอียด',
+      rent_price: 'ราคาเช่า',
+      sale_price: 'ราคาขาย',
+    };
+    return labels[field] || field;
   }
 }
 

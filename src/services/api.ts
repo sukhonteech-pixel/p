@@ -261,6 +261,116 @@ export const api = {
     });
   },
 
+  // Multi-Excel Merge: Preview & Conflict Detection
+  async previewMergeProperties(items: any[]): Promise<{
+    total: number;
+    newPropertiesCount: number;
+    existingPropertiesCount: number;
+    totalConflicts: number;
+    preview: Array<{
+      property_no: string;
+      filesFound: string[];
+      isExisting: boolean;
+      existingId: string | null;
+      existingData: any;
+      incomingData: any;
+      conflicts: Array<{
+        field: string;
+        label: string;
+        dbValue: any;
+        excelValue: any;
+        excelSource?: any;
+      }>;
+      hasConflicts: boolean;
+      newFieldsCount: number;
+      newContactsCount: number;
+      sources: Array<{
+        fileName: string;
+        sheetName?: string;
+        rowNumber?: number;
+        fieldsProvided?: string[];
+      }>;
+      fieldTraces: Record<string, any[]>;
+    }>;
+  }> {
+    return request('/api/properties/merge-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    });
+  },
+
+  // Multi-Excel Merge: Execute Merge Import
+  async executeMergeImport(
+    items: any[],
+    options: {
+      batchName?: string;
+      fileNames: string[];
+      defaultConflictResolution?: 'keep_existing' | 'use_excel' | 'skip';
+      user?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    batch: {
+      id: string;
+      batch_name: string;
+      files: string[];
+      total_properties: number;
+      new_properties: number;
+      updated_properties: number;
+      contacts_added: number;
+      photos_added: number;
+      files_added: number;
+      conflicts_count: number;
+      status: string;
+      created_at: string;
+      created_by: string;
+    };
+    summary: {
+      totalProperties: number;
+      newProperties: number;
+      updatedProperties: number;
+      contactsAdded: number;
+      photosAdded: number;
+      filesAdded: number;
+      conflictsResolved: number;
+      errorsCount: number;
+      errors: Array<{ property_no: string; error: string }>;
+    };
+  }> {
+    return request('/api/properties/merge-import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, options }),
+    });
+  },
+
+  // Get Import Batches History
+  async getImportBatches(): Promise<
+    Array<{
+      id: string;
+      batch_name: string;
+      files: string[];
+      total_properties: number;
+      new_properties: number;
+      updated_properties: number;
+      contacts_added: number;
+      photos_added: number;
+      files_added: number;
+      conflicts_count: number;
+      status: string;
+      created_at: string;
+      created_by: string;
+    }>
+  > {
+    return request('/api/import-batches');
+  },
+
+  // Get Single Import Batch Detail
+  async getImportBatch(id: string) {
+    return request(`/api/import-batches/${id}`);
+  },
+
   // Add Contact
   async addContact(
     propertyId: string,

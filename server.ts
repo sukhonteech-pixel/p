@@ -15,7 +15,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve uploaded files statically
-const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+const uploadDir = peakDb.getUploadDir();
 app.use('/uploads', express.static(uploadDir));
 
 // Multer memory storage configuration for file uploads (max 50MB per file)
@@ -219,6 +219,57 @@ app.post('/api/properties/import', async (req, res) => {
     const result = await peakDb.importExcelBatch(items, duplicateStrategy || 'UPDATE', user);
     broadcast('properties.imported', result);
     res.status(200).json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 9.1 Multi-Excel Merge: Preview & Conflict Detection
+app.post('/api/properties/merge-preview', (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'items array is required' });
+    }
+    const preview = peakDb.previewMergeProperties(items);
+    res.status(200).json(preview);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 9.2 Multi-Excel Merge: Execute Safe Merge & Import
+app.post('/api/properties/merge-import', async (req, res) => {
+  try {
+    const { items, options } = req.body;
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'items array is required' });
+    }
+    const user = (req.headers['x-user'] as string) || options?.user || 'Admin';
+    const result = await peakDb.mergeImportProperties(items, { ...options, user });
+    broadcast('properties.merged_import', result);
+    res.status(200).json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 9.3 Import Batches History
+app.get('/api/import-batches', (req, res) => {
+  try {
+    const batches = peakDb.getImportBatches();
+    res.status(200).json(batches);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 9.4 Single Import Batch Details
+app.get('/api/import-batches/:id', (req, res) => {
+  try {
+    const batch = peakDb.getImportBatchById(req.params.id);
+    if (!batch) return res.status(404).json({ error: 'Batch not found' });
+    res.status(200).json(batch);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -576,4 +627,11 @@ async function start() {
   });
 }
 
-start();
+// Only start standalone HTTP server if not in a serverless environment (e.g. Vercel)
+const isServerless = !!process.env.VERCEL || !!process.env.NOW_REGION || process.env.SERVERLESS === '1';
+if (!isServerless) {
+  start();
+}
+
+export default app;
+export { app, server };

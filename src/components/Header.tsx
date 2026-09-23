@@ -9,6 +9,7 @@ import {
   Phone,
   Settings,
   LayoutDashboard,
+  Layers,
 } from 'lucide-react';
 import { DashboardStats } from '../services/api';
 
@@ -28,7 +29,8 @@ export const Header: React.FC<HeaderProps> = ({
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'properties', label: 'Properties', icon: Building2 },
-    { id: 'upload', label: 'Upload Excel', icon: Upload },
+    { id: 'import_merge', label: 'Import & Merge Excel', icon: Layers, badge: 'New' },
+    { id: 'upload', label: 'Upload Excel (เดิม)', icon: Upload },
     { id: 'contacts', label: 'Contacts', icon: Phone },
     { id: 'files', label: 'Files', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
@@ -102,6 +104,11 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {item.label}
+                  {item.badge && (
+                    <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-red-600 text-white animate-pulse">
+                      {item.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}

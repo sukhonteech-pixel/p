@@ -151,7 +151,14 @@ export const UploadExcelView: React.FC<UploadExcelViewProps> = ({
       onImportCompleted();
     } catch (err: any) {
       console.error('Import failed:', err);
-      setErrorMsg(`เกิดข้อผิดพลาดในการนำเข้าข้อมูล: ${err.message || 'Database error'}`);
+      const is404 = err.status === 404 || (err.message && err.message.includes('404'));
+      if (is404) {
+        setErrorMsg(
+          'HTTP 404 Not Found (เซิร์ฟเวอร์ Backend ยังไม่พร้อมบน Vercel): ระบบต้องการ Serverless Function ในการประมวลผล /api/properties/import ซึ่งขณะนี้ได้เพิ่มไฟล์ vercel.json และ api/index.ts ในโปรเจกต์แล้ว กรุณากด Redeploy บน Vercel หรือรันแบบ Full-Stack ด้วยคำสั่ง npm run dev'
+        );
+      } else {
+        setErrorMsg(`เกิดข้อผิดพลาดในการนำเข้าข้อมูล: ${err.message || 'Database error'}`);
+      }
     } finally {
       setIsProcessing(false);
       setImportProgress(null);
