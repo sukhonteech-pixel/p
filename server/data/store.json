@@ -10238,6 +10238,15 @@
   ],
   "updateLogs": [
     {
+      "id": "log-1790236599428-ipeu",
+      "property_id": "prop-1790236599427-xusyq",
+      "action": "Created",
+      "changed_field": "All",
+      "new_value": "Created property TEST-INVOKE-1",
+      "user_name": "Admin",
+      "created_at": "2026-09-24T07:56:39.427Z"
+    },
+    {
       "id": "log-1790159997867-uhuw",
       "property_id": "prop-1790158378983-xl3q5",
       "action": "Photo Uploaded",
