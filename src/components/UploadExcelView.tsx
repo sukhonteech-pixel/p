@@ -119,8 +119,8 @@ export const UploadExcelView: React.FC<UploadExcelViewProps> = ({
     setImportProgress({ current: 0, total: validRowsToImport.length });
 
     try {
-      // Chunking for large datasets (e.g., 5,000 rows)
-      const chunkSize = 200;
+      // Chunking for optimal server response time and high reliability
+      const chunkSize = 100;
       let totalImported = 0;
       let totalUpdated = 0;
       let totalSkipped = 0;
@@ -157,7 +157,8 @@ export const UploadExcelView: React.FC<UploadExcelViewProps> = ({
           'HTTP 404 Not Found (เซิร์ฟเวอร์ Backend ยังไม่พร้อมบน Vercel): ระบบต้องการ Serverless Function ในการประมวลผล /api/properties/import ซึ่งขณะนี้ได้เพิ่มไฟล์ vercel.json และ api/index.ts ในโปรเจกต์แล้ว กรุณากด Redeploy บน Vercel หรือรันแบบ Full-Stack ด้วยคำสั่ง npm run dev'
         );
       } else {
-        setErrorMsg(`เกิดข้อผิดพลาดในการนำเข้าข้อมูล: ${err.message || 'Database error'}`);
+        const detail = err.data?.error || err.message || 'Server error';
+        setErrorMsg(`เกิดข้อผิดพลาดในการนำเข้าข้อมูล: ${detail}`);
       }
     } finally {
       setIsProcessing(false);

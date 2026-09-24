@@ -1,70 +1,6 @@
 {
   "properties": [
     {
-      "id": "prop-1790161110063-0jym2",
-      "property_no": "TEST-VN999",
-      "property_name": "Test Villa Laguna",
-      "category": "Villa",
-      "property_type": "Residential",
-      "status": "Inactive",
-      "project_name": "",
-      "location": "",
-      "zone": "",
-      "bedroom": 3,
-      "bathroom": 3,
-      "land_area": 450,
-      "building_area": 0,
-      "floor": "",
-      "year_built": "",
-      "furniture": "",
-      "pool": "",
-      "parking": "",
-      "description": "",
-      "rent_price": 0,
-      "sale_price": 15000000,
-      "additional_data": {
-        "_import_batch_id": "batch-1790161110063-k5w31",
-        "_sources": [
-          {
-            "fileName": "Excel_A_Property.xlsx",
-            "rowNumber": 2,
-            "fieldsProvided": [
-              "bedroom",
-              "bathroom"
-            ]
-          },
-          {
-            "fileName": "Excel_B_Phone.xlsx",
-            "rowNumber": 5,
-            "fieldsProvided": [
-              "phone"
-            ]
-          },
-          {
-            "fileName": "Excel_C_Owner.xlsx",
-            "rowNumber": 3,
-            "fieldsProvided": [
-              "owner",
-              "phone"
-            ]
-          },
-          {
-            "fileName": "Excel_D_Price.xlsx",
-            "rowNumber": 4,
-            "fieldsProvided": [
-              "sale_price"
-            ]
-          }
-        ],
-        "_created_via": "excel_merge",
-        "_last_batch_id": "batch-1790161118045-vm1cd",
-        "_last_merged_at": "2026-09-23T10:58:38.045Z"
-      },
-      "is_archived": true,
-      "created_at": "2026-09-23T10:58:30.063Z",
-      "updated_at": "2026-09-23T10:58:46.624Z"
-    },
-    {
       "id": "prop-1790159519974-fbkmv",
       "property_no": "VN570",
       "property_name": "Villa Natura 570",
@@ -10119,30 +10055,7 @@
       "updated_at": "2026-09-23T10:12:58.332Z"
     }
   ],
-  "contacts": [
-    {
-      "id": "cnt-1790161110063-h34g",
-      "property_id": "prop-1790161110063-0jym2",
-      "contact_name": "Khun Somchai",
-      "contact_type": "Owner",
-      "phone": "0812345678",
-      "email": "",
-      "note": "",
-      "created_at": "2026-09-23T10:58:30.063Z",
-      "updated_at": "2026-09-23T10:58:30.063Z"
-    },
-    {
-      "id": "cnt-1790161118050-cdcc",
-      "property_id": "prop-1790161110063-0jym2",
-      "contact_name": "John Wick",
-      "contact_type": "Owner",
-      "phone": "0899999999",
-      "email": "",
-      "note": "",
-      "created_at": "2026-09-23T10:58:38.050Z",
-      "updated_at": "2026-09-23T10:58:38.050Z"
-    }
-  ],
+  "contacts": [],
   "photos": [
     {
       "id": "photo-1790159525574-r5ft",
@@ -10324,54 +10237,6 @@
     }
   ],
   "updateLogs": [
-    {
-      "id": "log-1790161126630-f67e",
-      "property_id": "prop-1790161110063-0jym2",
-      "action": "Archived",
-      "changed_field": "is_archived",
-      "old_value": "false",
-      "new_value": "true",
-      "user_name": "Admin",
-      "created_at": "2026-09-23T10:58:46.630Z"
-    },
-    {
-      "id": "log-1790161126624-hnwn",
-      "property_id": "prop-1790161110063-0jym2",
-      "action": "Updated",
-      "changed_field": "status",
-      "old_value": "Available",
-      "new_value": "Inactive",
-      "user_name": "Admin",
-      "created_at": "2026-09-23T10:58:46.624Z"
-    },
-    {
-      "id": "log-1790161118050-dvvf",
-      "property_id": "prop-1790161110063-0jym2",
-      "action": "Contact Added",
-      "changed_field": "contact",
-      "new_value": "Owner: John Wick (0899999999)",
-      "user_name": "Admin",
-      "created_at": "2026-09-23T10:58:38.050Z"
-    },
-    {
-      "id": "log-1790161118045-yzpv",
-      "property_id": "prop-1790161110063-0jym2",
-      "action": "Updated",
-      "changed_field": "land_area",
-      "old_value": "0",
-      "new_value": "450",
-      "user_name": "Admin",
-      "created_at": "2026-09-23T10:58:38.045Z"
-    },
-    {
-      "id": "log-1790161110063-y507",
-      "property_id": "prop-1790161110063-0jym2",
-      "action": "Created via Multi-Excel Merge",
-      "changed_field": "All",
-      "new_value": "Created property TEST-VN999 from 2 Excel sources",
-      "user_name": "Admin",
-      "created_at": "2026-09-23T10:58:30.063Z"
-    },
     {
       "id": "log-1790159997867-uhuw",
       "property_id": "prop-1790158378983-xl3q5",

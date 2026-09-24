@@ -417,9 +417,10 @@ class PeakDatabaseService {
         email?: string;
       }>;
     },
-    user = 'Admin'
+    user = 'Admin',
+    autoSave = true
   ): Promise<PropertyRecord> {
-    const cleanNo = data.property_no.trim().toUpperCase();
+    const cleanNo = (data.property_no || '').trim().toUpperCase();
     if (!cleanNo) {
       throw new Error('Property No is required');
     }
@@ -492,24 +493,31 @@ class PeakDatabaseService {
       created_at: now,
     });
 
-    this.saveStore();
+    if (autoSave) {
+      this.saveStore();
 
-    // Mirror to Supabase if connected
-    if (this.supabase) {
-      (async () => {
-        try {
-          await this.supabase!.from('properties').insert([record]);
-        } catch (err) {
-          console.error('[Supabase Mirror] Error inserting property:', err);
-        }
-      })();
+      // Mirror to Supabase if connected
+      if (this.supabase) {
+        (async () => {
+          try {
+            await this.supabase!.from('properties').insert([record]);
+          } catch (err) {
+            console.error('[Supabase Mirror] Error inserting property:', err);
+          }
+        })();
+      }
     }
 
     return record;
   }
 
   // Update Property and Record Field-by-Field History
-  async updateProperty(id: string, updates: Partial<PropertyRecord>, user = 'Admin'): Promise<PropertyRecord> {
+  async updateProperty(
+    id: string,
+    updates: Partial<PropertyRecord>,
+    user = 'Admin',
+    autoSave = true
+  ): Promise<PropertyRecord> {
     const prop = this.memoryStore.properties.find((p) => p.id === id);
     if (!prop) {
       throw new Error(`Property with id '${id}' not found`);
@@ -564,16 +572,19 @@ class PeakDatabaseService {
     }
 
     Object.assign(prop, updates, { updated_at: now });
-    this.saveStore();
 
-    if (this.supabase) {
-      (async () => {
-        try {
-          await this.supabase!.from('properties').update(prop).eq('id', id);
-        } catch (err) {
-          console.error('[Supabase Mirror] Error updating property:', err);
-        }
-      })();
+    if (autoSave) {
+      this.saveStore();
+
+      if (this.supabase) {
+        (async () => {
+          try {
+            await this.supabase!.from('properties').update(prop).eq('id', id);
+          } catch (err) {
+            console.error('[Supabase Mirror] Error updating property:', err);
+          }
+        })();
+      }
     }
 
     return prop;
@@ -653,7 +664,8 @@ class PeakDatabaseService {
       email?: string;
       note?: string;
     },
-    user = 'Admin'
+    user = 'Admin',
+    autoSave = true
   ) {
     const prop = this.memoryStore.properties.find((p) => p.id === propertyId);
     if (!prop) {
@@ -688,7 +700,9 @@ class PeakDatabaseService {
       created_at: now,
     });
 
-    this.saveStore();
+    if (autoSave) {
+      this.saveStore();
+    }
     return contact;
   }
 
@@ -1127,7 +1141,8 @@ class PeakDatabaseService {
                 sale_price: item.sale_price !== undefined ? item.sale_price : existing.sale_price,
                 additional_data: { ...existing.additional_data, ...item.additional_data },
               },
-              user
+              user,
+              false // autoSave = false for batch performance
             );
 
             // Add phone if provided and not already present
@@ -1143,7 +1158,8 @@ class PeakDatabaseService {
                     contact_type: 'Owner',
                     phone: item.phone,
                   },
-                  user
+                  user,
+                  false // autoSave = false for batch performance
                 );
               }
             }
@@ -1185,7 +1201,8 @@ class PeakDatabaseService {
               additional_data: item.additional_data || {},
               contacts,
             },
-            user
+            user,
+            false // autoSave = false for batch performance
           );
           imported++;
         }
@@ -1196,6 +1213,9 @@ class PeakDatabaseService {
         });
       }
     }
+
+    // Single atomic save at the end of the batch
+    this.saveStore();
 
     return {
       total: items.length,

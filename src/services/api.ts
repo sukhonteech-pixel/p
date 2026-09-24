@@ -41,14 +41,21 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    const errorMsg =
-      (body && typeof body === 'object' && (body.message || body.error)) ||
-      res.statusText ||
-      `HTTP Error ${res.status}`;
-    const errorCode =
-      body && typeof body === 'object' && typeof body.error === 'string'
-        ? body.error
-        : `HTTP_${res.status}`;
+    let errorMsg = '';
+    let errorCode = `HTTP_${res.status}`;
+
+    if (body && typeof body === 'object') {
+      errorMsg = body.error || body.message || body.detail || '';
+      if (typeof body.error === 'string') errorCode = body.error;
+    } else if (typeof body === 'string' && body.trim()) {
+      const titleMatch = body.match(/<title>(.*?)<\/title>/i);
+      errorMsg = titleMatch ? titleMatch[1].trim() : body.slice(0, 200).trim();
+    }
+
+    if (!errorMsg) {
+      errorMsg = res.statusText || `HTTP Error ${res.status}`;
+    }
+
     throw new ApiError(errorMsg, res.status, errorCode, body);
   }
 

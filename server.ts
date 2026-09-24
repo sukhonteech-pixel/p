@@ -217,10 +217,15 @@ app.post('/api/properties/import', async (req, res) => {
 
     const user = (req.headers['x-user'] as string) || 'Admin';
     const result = await peakDb.importExcelBatch(items, duplicateStrategy || 'UPDATE', user);
-    broadcast('properties.imported', result);
+    try {
+      broadcast('properties.imported', result);
+    } catch (wsErr) {
+      console.warn('[WebSocket] Broadcast error:', wsErr);
+    }
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error('[Batch Import Error]', err);
+    res.status(500).json({ error: err.message || 'Internal import error' });
   }
 });
 
